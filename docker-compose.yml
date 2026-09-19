@@ -1,0 +1,81 @@
+services:
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: flow-studio-backend
+    restart: unless-stopped
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8000"
+      DEBUG: "false"
+      SECRET_KEY: "${SECRET_KEY}"          # set in .env file
+      PROJECTS_DIR: "/data/projects"
+      FRAME_CACHE_DIR: "/data/frame_cache"
+      REPORTS_DIR: "/data/reports_data"
+      PERSIST_DB: "/data/reports_data/persist.duckdb"
+      REPORTS_URL: "http://localhost:${REPORTS_PORT:-8501}"
+      METADATA_DB_URL: "sqlite+aiosqlite:////data/flow_studio.db"
+      # Optional: point to a real Postgres for metadata instead of SQLite
+      # METADATA_DB_URL: "postgresql+asyncpg://user:pass@postgres:5432/flowstudio"
+    volumes:
+      - flow_data:/data                    # persists projects, cache, DB
+    # Makes host.docker.internal resolve to the host machine on Linux
+    # (it's automatic on Docker Desktop for Mac/Windows, but not Linux).
+    # Use host.docker.internal as the Host in any connection to a DB running
+    # on your host machine (e.g. local Postgres/ClickHouse on localhost).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - flow-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: flow-studio-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"        # access at http://localhost:8080
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - flow-net
+
+  # Optional report viewer — start with: docker compose --profile reports up
+  reports:
+    build:
+      context: ./reports-app
+      dockerfile: Dockerfile
+    container_name: flow-studio-reports
+    restart: unless-stopped
+    profiles: ["reports"]
+    ports:
+      - "${REPORTS_PORT:-8501}:8501"       # dashboards at http://localhost:8501
+    environment:
+      REPORTS_DB: "/data/reports_data/reports.duckdb"
+    volumes:
+      - flow_data:/data:ro                 # read-only — backend is the single writer
+    networks:
+      - flow-net
+
+volumes:
+  flow_data:
+    driver: local
+    # To use a host directory instead of a named volume:
+    # driver_opts:
+    #   type: none
+    #   device: /opt/flow-studio/data
+    #   o: bind
+
+networks:
+  flow-net:
+    driver: bridge

@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=75.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flow-studio-backend"
+version = "1.10"
+description = "Sidewinder Flow Studio (SFS) — visual Python notebook DAG with scheduling"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "websockets>=13.0",
+    "sqlalchemy>=2.0.0",
+    "pandas>=2.2.0",
+    "pyarrow>=18.0.0",
+    "duckdb>=1.1.0",
+    "polars>=1.9.0",
+    "psycopg[binary]>=3.2.0",
+    "cryptography>=43.0.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    "aiosqlite>=0.20.0",
+    "apscheduler>=3.10.0",
+    "plotly>=5.24.0",
+    "matplotlib>=3.9.0",
+    "seaborn>=0.13.0",
+    "python-multipart>=0.0.12",
+    "croniter>=3.0.0",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+]
+
+# ── Database / warehouse connectors (install only what you need) ──
+snowflake  = ["snowflake-sqlalchemy>=1.6", "snowflake-connector-python>=3.10"]
+bigquery   = ["sqlalchemy-bigquery>=1.11", "google-cloud-bigquery>=3.25"]
+clickhouse = ["clickhouse-sqlalchemy>=0.3"]
+redshift   = ["sqlalchemy-redshift>=0.8", "psycopg2-binary>=2.9"]
+mssql      = ["pyodbc>=5.1"]
+oracle     = ["oracledb>=2.4"]
+mysql      = ["pymysql>=1.1"]
+druid      = ["pydruid>=0.6"]
+adls       = ["adlfs>=2024.7"]
+trino      = ["trino[sqlalchemy]>=0.330"]
+databricks = ["databricks-sql-connector>=3.4", "databricks-sqlalchemy>=1.0"]
+starrocks  = ["pymysql>=1.1"]
+doris      = ["pymysql>=1.1"]
+# Table formats read directly (engine-less)
+deltalake  = ["deltalake>=0.19"]
+iceberg    = ["pyiceberg>=0.7"]
+
+# ── Enterprise engines: SQL pushdown (SQLGlot) + Ibis ──
+enterprise = ["sqlglot>=25.0", "ibis-framework>=9.0"]
+
+# ── Everything at once ──
+all-connectors = [
+    "snowflake-sqlalchemy>=1.6", "snowflake-connector-python>=3.10",
+    "sqlalchemy-bigquery>=1.11", "google-cloud-bigquery>=3.25",
+    "clickhouse-sqlalchemy>=0.3",
+    "sqlalchemy-redshift>=0.8", "psycopg2-binary>=2.9",
+    "pyodbc>=5.1", "oracledb>=2.4", "pymysql>=1.1", "pydruid>=0.6", "adlfs>=2024.7",
+    "trino[sqlalchemy]>=0.330",
+    "databricks-sql-connector>=3.4", "databricks-sqlalchemy>=1.0",
+    "deltalake>=0.19", "pyiceberg>=0.7",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]

@@ -1,0 +1,18 @@
+# Backend
+backend/.venv
+backend/__pycache__
+backend/**/__pycache__
+backend/*.db
+backend/projects/
+backend/frame_cache/
+backend/.env
+
+# Frontend
+frontend/node_modules
+frontend/dist
+
+# Root
+.env
+.git
+.gitignore
+*.zip

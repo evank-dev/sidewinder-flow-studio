@@ -1,0 +1,66 @@
+# ── Secrets — NEVER commit ────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+!.env.docker
+**/.env
+**/.env.local
+*.pem
+*.key
+credentials*.json
+service-account*.json
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ── SFS runtime data (per-install, not source) ────────────────────────────────
+backend/projects/
+backend/frame_cache/
+backend/reports_data/
+backend/*.db
+backend/*.db-shm
+backend/*.db-wal
+backend/*.duckdb
+backend/*.duckdb.wal
+**/flow_studio.db
+**/custom_processors.json
+data/
+flow_data/
+
+# ── Node / frontend ───────────────────────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+
+# ── Packaging / archives ──────────────────────────────────────────────────────
+*.zip
+*.tar
+*.tar.gz
+*.whl
+
+# ── Editors / OS ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini

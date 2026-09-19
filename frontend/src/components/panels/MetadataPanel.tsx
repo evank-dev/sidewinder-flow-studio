@@ -1,0 +1,237 @@
+import { useState } from 'react'
+import { Plus, Trash2, Check, X, TestTube2, Pencil } from 'lucide-react'
+import { useStore } from '@/store'
+import { api } from '@/utils/api'
+import { AgentProvidersPanel } from './AgentProvidersPanel'
+import { useEffect as _useEffect, useState as _useState } from 'react'
+import type { RunRow } from '@/types'
+
+function RunsPanel() {
+  const { activeProject } = useStore()
+  const [runs, setRuns] = _useState<RunRow[]>([])
+  const load = async () => { try { setRuns(await api.runs.list(activeProject?.id)) } catch {} }
+  _useEffect(() => { load() }, [activeProject?.id])
+
+  const color = (s: string) => s === 'ok' ? 'text-status-ok' : s === 'error' ? 'text-status-error'
+    : s === 'stopped' ? 'text-amber-400' : 'text-muted'
+  const icon = (s: string) => s === 'ok' ? '✓' : s === 'error' ? '✗' : s === 'stopped' ? '⊘' : '⋯'
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted">Recent runs (manual + scheduled)</p>
+        <button className="btn-ghost text-xs" onClick={load}>↻</button>
+      </div>
+      {runs.length === 0 && <p className="text-xs text-subtle">No runs yet.</p>}
+      {runs.map((r) => (
+        <div key={r.id} className="rounded-lg border border-canvas-border p-2 text-xs space-y-1">
+          <div className="flex items-center gap-2">
+            <span className={color(r.status)}>{icon(r.status)}</span>
+            <span className="font-medium text-slate-200 flex-1 truncate">{r.flow_name || r.flow_id}</span>
+            <span className="text-subtle">{r.trigger === 'schedule' ? '🕐' : '▶'}</span>
+            {r.attempt > 1 && <span className="text-amber-400">try {r.attempt}</span>}
+          </div>
+          <div className="flex items-center gap-2 text-subtle">
+            {r.started_at && <span>{new Date(r.started_at).toLocaleString()}</span>}
+            {r.duration_ms != null && <span>· {(r.duration_ms/1000).toFixed(1)}s</span>}
+            {r.nodes_ok != null && <span>· {r.nodes_ok}✓{r.nodes_error ? ` ${r.nodes_error}✗` : ''}</span>}
+          </div>
+          {r.error && <div className="text-red-300 bg-red-950/30 rounded p-1 break-words">{r.error.slice(0,200)}</div>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+const DIALECTS = [
+  'postgresql','mysql','sqlite','mssql','oracle','druid',
+  'snowflake','bigquery','clickhouse','redshift','adls',
+  'starrocks','doris','trino','databricks',
+]
+
+// Per-dialect field hints — host/database mean different things per engine
+const DIALECT_HINTS: Record<string, { host: string; port: string; database: string; extra: string }> = {
+  postgresql: { host: 'localhost',                    port: '5432', database: 'mydb',            extra: '' },
+  mysql:      { host: 'localhost',                    port: '3306', database: 'mydb',            extra: '' },
+  sqlite:     { host: '',                             port: '',     database: '/path/to.db',     extra: '' },
+  mssql:      { host: 'server.domain',                port: '1433', database: 'mydb',            extra: 'driver=ODBC Driver 18 for SQL Server' },
+  oracle:     { host: 'host.domain',                  port: '1521', database: 'SERVICE_NAME',    extra: '' },
+  druid:      { host: 'broker-host',                  port: '8082', database: 'druid/v2/sql',    extra: '' },
+  snowflake:  { host: 'xy12345.eu-central-1 (account)', port: '',   database: 'DB/SCHEMA',       extra: 'warehouse=COMPUTE_WH&role=ANALYST' },
+  bigquery:   { host: 'gcp-project-id',               port: '',     database: 'dataset',         extra: 'credentials_path=/path/service-account.json' },
+  clickhouse: { host: 'ch-host',                      port: '8123', database: 'default',         extra: 'protocol=https (for port 8443)' },
+  redshift:   { host: 'cluster.xxxx.region.redshift.amazonaws.com', port: '5439', database: 'dev', extra: '' },
+  adls:       { host: 'storageaccountname',           port: '',     database: 'container',       extra: 'sas_token=... or client_id/client_secret/tenant_id' },
+  starrocks:  { host: 'fe-host',                       port: '9030', database: 'mydb',            extra: '' },
+  doris:      { host: 'fe-host',                       port: '9030', database: 'mydb',            extra: '' },
+  trino:      { host: 'coordinator-host',              port: '8080', database: 'catalog/schema',  extra: 'http_scheme=https (for TLS)' },
+  databricks: { host: 'dbc-xxxx.cloud.databricks.com', port: '',     database: '',                extra: 'http_path=/sql/1.0/warehouses/xxx&catalog=main&schema=default' },
+}
+
+export function MetadataPanel() {
+  const { connections, variables, loadConnections, loadVariables } = useStore()
+  const [tab, setTab] = useState<'conn' | 'vars' | 'ai' | 'runs'>('conn')
+  const [showAdd, setShowAdd] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [testRes, setTestRes] = useState<Record<string,boolean|null>>({})
+  const [form, setForm] = useState({ name:'', dialect:'postgresql', host:'', port:'', database:'', username:'', password:'', extra:'' })
+  const [varForm, setVarForm] = useState({ key:'', value:'', description:'' })
+
+  const blankForm = { name:'', dialect:'postgresql', host:'', port:'', database:'', username:'', password:'', extra:'' }
+
+  const startEdit = (c: any) => {
+    // Serialize existing extra_params back into the k=v&k2=v2 string
+    const extraStr = c.extra_params
+      ? Object.entries(c.extra_params).map(([k, v]) => `${k}=${v}`).join('&')
+      : ''
+    setForm({
+      name: c.name ?? '', dialect: c.dialect ?? 'postgresql',
+      host: c.host ?? '', port: c.port ? String(c.port) : '',
+      database: c.database ?? '', username: c.username ?? '',
+      password: '',              // never pre-filled; blank = keep existing
+      extra: extraStr,
+    })
+    setEditingId(c.id)
+    setShowAdd(true)
+  }
+
+  const addConn = async () => {
+    // Parse "k=v&k2=v2" extras into a dict for extra_params
+    const extra_params: Record<string, string> = {}
+    form.extra.split('&').map((kv) => kv.trim()).filter(Boolean).forEach((kv) => {
+      const i = kv.indexOf('=')
+      if (i > 0) extra_params[kv.slice(0, i).trim()] = kv.slice(i + 1).trim()
+    })
+    const { extra, ...rest } = form
+    const payload: any = {
+      ...rest,
+      port: form.port ? Number(form.port) : undefined,
+      extra_params: Object.keys(extra_params).length ? extra_params : undefined,
+    }
+    // On edit, don't send an empty password (keeps the stored one)
+    if (editingId && !form.password) delete payload.password
+
+    if (editingId) {
+      await api.connections.update(editingId, payload)
+    } else {
+      await api.connections.create(payload)
+    }
+    setShowAdd(false)
+    setEditingId(null)
+    setForm(blankForm)
+    await loadConnections()
+  }
+
+  const testConn = async (id: string) => {
+    setTestRes((r) => ({ ...r, [id]: null }))
+    const res = await api.connections.test(id)
+    setTestRes((r) => ({ ...r, [id]: res.ok }))
+  }
+
+  const addVar = async () => {
+    await api.metadata.createVar({ ...varForm, scope: 'global' })
+    setVarForm({ key:'', value:'', description:'' })
+    await loadVariables()
+  }
+
+  return (
+    <div className="p-4 space-y-3">
+      <div className="flex gap-1 bg-canvas-bg rounded-lg p-1">
+        {([['conn','Connections'],['vars','Variables'],['ai','AI'],['runs','Runs']] as const).map(([t,l]) => (
+          <button key={t} onClick={() => setTab(t)}
+            className={`flex-1 py-1.5 rounded text-xs font-medium transition-colors
+              ${tab === t ? 'bg-surface-raised text-accent' : 'text-muted hover:text-slate-300'}`}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'conn' && (
+        <>
+          {connections.map((c) => (
+            <div key={c.id} className="rounded-lg border border-canvas-border p-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-slate-200 flex-1">{c.name}</span>
+                <span className="text-xs font-mono text-muted bg-surface-overlay rounded px-1.5 py-0.5">{c.dialect}</span>
+                <button onClick={() => testConn(c.id)} className="btn-ghost p-1" title="Test">
+                  {testRes[c.id] === null ? <div className="w-3 h-3 border border-accent border-t-transparent rounded-full animate-spin" /> :
+                   testRes[c.id] === true  ? <Check size={12} className="text-status-ok" /> :
+                   testRes[c.id] === false ? <X size={12} className="text-status-error" /> :
+                   <TestTube2 size={12} />}
+                </button>
+                <button onClick={() => startEdit(c)} className="btn-ghost p-1" title="Edit">
+                  <Pencil size={12} />
+                </button>
+                <button onClick={async () => { await api.connections.delete(c.id); loadConnections() }}
+                  className="btn-ghost p-1 text-red-400" title="Delete"><Trash2 size={12} /></button>
+              </div>
+              <div className="text-xs text-muted font-mono">
+                {c.host}{c.port ? `:${c.port}` : ''}{c.database ? `/${c.database}` : ''}
+              </div>
+            </div>
+          ))}
+
+          {showAdd ? (
+            <div className="rounded-lg border border-accent/30 p-3 space-y-2">
+              {editingId && <div className="text-xs text-accent font-medium">Editing connection</div>}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="col-span-2"><label className="label">Name</label>
+                  <input className="input" value={form.name} onChange={(e) => setForm({...form,name:e.target.value})} /></div>
+                <div className="col-span-2"><label className="label">Dialect</label>
+                  <select className="input" value={form.dialect} onChange={(e) => setForm({...form,dialect:e.target.value})}>
+                    {DIALECTS.map((d) => <option key={d}>{d}</option>)}</select></div>
+                <div><label className="label">Host</label>
+                  <input className="input font-mono" value={form.host} onChange={(e) => setForm({...form,host:e.target.value})} placeholder={DIALECT_HINTS[form.dialect]?.host ?? 'localhost'} /></div>
+                <div><label className="label">Port</label>
+                  <input className="input font-mono" value={form.port} onChange={(e) => setForm({...form,port:e.target.value})} placeholder={DIALECT_HINTS[form.dialect]?.port ?? ''} /></div>
+                <div><label className="label">Database</label>
+                  <input className="input font-mono" value={form.database} onChange={(e) => setForm({...form,database:e.target.value})} placeholder={DIALECT_HINTS[form.dialect]?.database ?? ''} /></div>
+                <div><label className="label">Username</label>
+                  <input className="input font-mono" value={form.username} onChange={(e) => setForm({...form,username:e.target.value})} /></div>
+                <div className="col-span-2"><label className="label">Password</label>
+                  <input type="password" className="input" value={form.password} onChange={(e) => setForm({...form,password:e.target.value})}
+                    placeholder={editingId ? 'leave blank to keep current' : (form.dialect === 'adls' ? 'account key' : '')} /></div>
+                <div className="col-span-2"><label className="label">Extra options (k=v&k2=v2)</label>
+                  <input className="input font-mono text-xs" value={form.extra} onChange={(e) => setForm({...form,extra:e.target.value})}
+                    placeholder={DIALECT_HINTS[form.dialect]?.extra ?? ''} /></div>
+              </div>
+              <div className="flex gap-2">
+                <button className="btn-pri flex-1" onClick={addConn}>{editingId ? 'Save changes' : 'Add'}</button>
+                <button className="btn-ghost" onClick={() => { setShowAdd(false); setEditingId(null); setForm(blankForm) }}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <button className="btn-ghost w-full justify-center border border-dashed border-canvas-border"
+              onClick={() => setShowAdd(true)}><Plus size={12} /> Add Connection</button>
+          )}
+        </>
+      )}
+
+      {tab === 'vars' && (
+        <>
+          {variables.map((v) => (
+            <div key={v.id} className="rounded-lg border border-canvas-border p-3 flex gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="font-mono text-xs text-accent">{v.key}</div>
+                <div className="text-xs text-slate-300 truncate">{v.value}</div>
+                {v.description && <div className="text-xs text-muted">{v.description}</div>}
+              </div>
+              <button onClick={async () => { await api.metadata.deleteVar(v.id); loadVariables() }}
+                className="btn-ghost p-1 text-red-400 shrink-0"><Trash2 size={12} /></button>
+            </div>
+          ))}
+
+          <div className="rounded-lg border border-canvas-border p-3 space-y-2">
+            <div><label className="label">Key</label>
+              <input className="input font-mono" value={varForm.key} onChange={(e) => setVarForm({...varForm,key:e.target.value})} placeholder="MY_VAR" /></div>
+            <div><label className="label">Value</label>
+              <input className="input" value={varForm.value} onChange={(e) => setVarForm({...varForm,value:e.target.value})} /></div>
+            <button className="btn-pri w-full" onClick={addVar}><Plus size={12} /> Add Variable</button>
+          </div>
+        </>
+      )}
+      {tab === 'ai' && <AgentProvidersPanel />}
+      {tab === 'runs' && <RunsPanel />}
+    </div>
+  )
+}

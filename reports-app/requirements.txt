@@ -1,0 +1,8 @@
+# Pinned as a known-good pair — pygwalker imports private Streamlit internals
+# (make_url_path_regex), so newer Streamlit versions break it. If you upgrade
+# pygwalker, re-test before loosening the streamlit pin.
+streamlit==1.41.1
+pygwalker==0.5.0.1
+duckdb>=1.1.0
+pandas>=2.2.0
+pyarrow>=18.0.0

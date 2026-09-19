@@ -1,0 +1,23 @@
+services:
+  flow-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile.single
+    container_name: flow-studio
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      SECRET_KEY: "${SECRET_KEY}"
+      SERVE_STATIC: "true"
+      DEBUG: "false"
+    volumes:
+      - flow_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  flow_data:
