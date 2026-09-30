@@ -70,6 +70,10 @@ export const api = {
       req<RunRow[]>(`/runs/${project_id ? `?project_id=${project_id}&limit=${limit}` : `?limit=${limit}`}`),
   },
 
+  frameColumns: (project_id: string, node_id: string) =>
+    req<{ ran: boolean; columns: { name: string; dtype: string }[] }>(
+      `/metadata/frame-columns?project_id=${encodeURIComponent(project_id)}&node_id=${encodeURIComponent(node_id)}`),
+
   capabilities: () => req<{
     engines: { name: string; label: string; description: string; tier: string;
                language: string; needs_target_connection: boolean; source: string;

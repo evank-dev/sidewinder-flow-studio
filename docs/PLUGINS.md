@@ -32,6 +32,16 @@ implementation differs.
 
 ---
 
+## A complete working example
+
+[`plugins/sfs-plugin-sklearn`](../plugins/sfs-plugin-sklearn) is an installable
+package implementing everything below — a scikit-learn engine. Copy it as a
+starting point rather than writing a plugin from scratch.
+
+```bash
+pip install -e plugins/sfs-plugin-sklearn   # engine appears in the picker
+```
+
 ## Declaring a plugin
 
 In your package's `pyproject.toml`:
@@ -95,6 +105,48 @@ land in `df_extra`/`arrow_extra` (in stable parent order). This mirrors the
 
 ---
 
+## Declaring parameters (optional)
+
+By default a node's only input is its code cell. An engine can also declare
+`params` — form fields the node panel renders above the editor. Values are
+stored in the node's data and delivered to `run` in `ec.params` with defaults
+already applied.
+
+```python
+params=(
+    {"key": "target", "label": "Target column", "type": "column",
+     "help": "Leave the code cell empty to just train on this target."},
+    {"key": "kind", "label": "Model", "type": "select",
+     "options": ["auto", "rf_classifier", "linear"], "default": "auto"},
+    {"key": "test_size", "label": "Test size", "type": "number", "default": 0.2},
+    {"key": "show_metrics", "label": "Print metrics", "type": "boolean", "default": True},
+)
+```
+
+| Field | Meaning |
+|---|---|
+| `key` | Stored in node data and used as the key in `ec.params`. |
+| `label` | Field label (defaults to `key`). |
+| `type` | `string` \| `number` \| `boolean` \| `select` \| `column` \| `connection`. Unknown types render as text. |
+| `default` | Applied when the field is empty. |
+| `required` | Run fails early with a clear message if empty. |
+| `options` | Choices for `select`. |
+| `help` | Small hint under the field. |
+
+`column` renders a dropdown of the upstream frame's actual columns once that
+node has run, and degrades to a text input before then. `connection` lists the
+user's configured connections.
+
+Params are **optional and additive** — declare none and your engine behaves
+exactly as before, a plain code cell. Declaring them doesn't remove the code
+cell either: a user can fill the fields, write code, or both (the example plugin
+exposes the chosen target to node code as `TARGET`).
+
+Unknown keys in node data are ignored by `resolve_params`, so params can never
+collide with core node fields.
+
+---
+
 ## EngineContext
 
 ```python
@@ -104,6 +156,7 @@ class EngineContext:
     node_data: dict        # full node data (custom options live here)
     exec_globals: dict     # injected names: pd, sa, get_engine, fast_write, vars, …
     preamble: str          # flow-level imports + shared functions
+    params: dict           # declared params, defaults applied
     df_in / df_extra       # input_mode="pandas"
     arrow_in / arrow_extra # input_mode="arrow"
     frame_paths            # input_mode="paths"

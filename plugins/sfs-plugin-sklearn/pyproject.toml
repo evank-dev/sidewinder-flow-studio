@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=75.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sfs-plugin-sklearn"
+version = "0.1.0"
+description = "scikit-learn execution engine for Sidewinder Flow Studio — example plugin"
+requires-python = ">=3.11"
+dependencies = [
+    "scikit-learn>=1.4",
+]
+
+# ── This is what makes SFS discover the plugin ────────────────────────────────
+# At startup SFS reads the "sfs.plugins" entry point group and calls each
+# referenced function with the registry API. Nothing else is needed — no config
+# file, no SFS code change.
+[project.entry-points."sfs.plugins"]
+sklearn = "sfs_plugin_sklearn.plugin:register"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sfs_plugin_sklearn*"]

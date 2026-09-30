@@ -39,6 +39,7 @@ class EngineContext:
     node_data: dict                        # full node data (labels, options…)
     exec_globals: dict                     # injected names (pd, get_engine, …)
     preamble: str = ""                     # flow imports + shared functions
+    params: dict = field(default_factory=dict)  # declared params, defaults applied
     # input_mode="pandas"
     df_in: Any = None
     df_extra: list = field(default_factory=list)
@@ -66,7 +67,43 @@ class EngineSpec:
     requires: tuple[str, ...] = ()          # importable modules this engine needs
     needs_target_connection: bool = False   # pushdown engines
     hint: str = ""                          # placeholder/help text
+    # Optional declarative parameters. If present, the node panel renders form
+    # fields above the code editor and their values are delivered in
+    # EngineContext.params. Engines that declare none stay code-cell-only.
+    # Each entry: {key, label, type, default?, required?, options?, help?}
+    # type ∈ string | number | boolean | select | column | connection
+    params: tuple[dict, ...] = ()
     source: str = "builtin"                 # "builtin" or "plugin:<dist>"
+
+    def resolve_params(self, node_data: dict) -> dict:
+        """Pull this engine's declared params out of a node's data, applying
+        defaults. Unknown keys in node_data are ignored, so params never
+        collide with core node fields."""
+        out: dict = {}
+        for p in self.params:
+            key = p.get("key")
+            if not key:
+                continue
+            val = node_data.get(key, None)
+            if val in (None, ""):
+                val = p.get("default")
+            if p.get("type") == "number" and val not in (None, ""):
+                try:
+                    val = float(val)
+                    if val == int(val):
+                        val = int(val)
+                except (TypeError, ValueError):
+                    pass
+            if p.get("type") == "boolean":
+                val = bool(val)
+            out[key] = val
+        return out
+
+    def missing_required(self, params: dict) -> list[str]:
+        """Names of required params with no value — checked before running."""
+        return [p["label"] if p.get("label") else p["key"]
+                for p in self.params
+                if p.get("required") and params.get(p.get("key")) in (None, "", [])]
 
     def available(self) -> tuple[bool, str | None]:
         """Is this engine usable in the current environment?"""
@@ -114,6 +151,8 @@ def list_engines() -> list[dict]:
             "tier": spec.tier,
             "language": spec.language,
             "needs_target_connection": spec.needs_target_connection,
+            "params": list(spec.params),
+            "hint": spec.hint,
             "source": spec.source,
             "available": ok,
             "unavailable_reason": reason,

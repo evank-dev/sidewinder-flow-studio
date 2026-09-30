@@ -11,6 +11,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useStore } from '@/store'
 import { api } from '@/utils/api'
+import { EngineParams } from './EngineParams'
 import { AgentBox } from './AgentBox'
 import Editor from '@monaco-editor/react'
 import { RefreshCw, Save, BookmarkPlus } from 'lucide-react'
@@ -502,6 +503,17 @@ export function ProcessorPanel({ nodeId }: { nodeId: string }) {
           }}
         />
       </div>
+
+      {engineSpec?.params?.length > 0 && (
+        <EngineParams
+          params={engineSpec.params}
+          data={data}
+          nodeId={nodeId}
+          onChange={(key, value) => {
+            if (activeFlowId) updateNodeData(activeFlowId, nodeId, { [key]: value })
+          }}
+        />
+      )}
 
       <div className="flex-1 flex flex-col min-h-0">
         {inputVars.length > 0 && (

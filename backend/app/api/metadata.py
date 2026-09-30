@@ -38,3 +38,24 @@ async def delete_var(vid: str, db: AsyncSession = Depends(get_db)):
     await db.commit()
     if r.rowcount == 0:
         raise HTTPException(404, "Not found")
+
+
+@router.get("/frame-columns")
+async def frame_columns(project_id: str, node_id: str):
+    """Column names (and dtypes) of a node's cached output frame.
+
+    Used by engine params of type "column" so the node panel can offer a real
+    dropdown instead of a free-text box. Returns an empty list if the node has
+    not run yet — callers should degrade to a text input.
+    """
+    from app.core.frame_cache import has_frame, load_frame
+    if not has_frame(project_id, node_id):
+        return {"columns": [], "ran": False}
+    try:
+        df = load_frame(project_id, node_id)
+        return {
+            "ran": True,
+            "columns": [{"name": str(c), "dtype": str(df[c].dtype)} for c in df.columns],
+        }
+    except Exception as exc:
+        return {"columns": [], "ran": False, "error": str(exc)}

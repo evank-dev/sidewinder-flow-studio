@@ -918,8 +918,19 @@ async def execute_flow(
                         )
                     target_dialect = (connection_dialects or {}).get(target, "postgresql")
 
+                # Declared params (if the engine has any) with defaults applied;
+                # fail early with a clear message rather than deep inside run().
+                engine_params = spec.resolve_params(data)
+                missing = spec.missing_required(engine_params)
+                if missing:
+                    raise ValueError(
+                        f"Engine '{spec.label}' needs: {', '.join(missing)} — "
+                        f"fill these in the node properties."
+                    )
+
                 ec = EngineContext(
-                    code=code, node_data=data, exec_globals=ctx, preamble=preamble_code,
+                    code=code, node_data=data, params=engine_params,
+                    exec_globals=ctx, preamble=preamble_code,
                     df_in=df_in, df_extra=df_extra,
                     arrow_in=arrow_in, arrow_extra=arrow_extra,
                     frame_paths=polars_paths,
