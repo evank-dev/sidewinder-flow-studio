@@ -22,7 +22,9 @@ This guide walks through every capability with runnable examples.
 |------|---------|
 | **Trigger** | Entry point. Manual (click Run) or Schedule (cron). Holds scheduling config. |
 | **Processor** | The workhorse. Runs code in one of five engines. Transforms `df`. |
+| **Router** | Conditional branching — sends the flow down one of several paths based on expressions evaluated against the data. |
 | **Stop / Tap** | Halts a branch (hard) or passes through while marking a checkpoint (tap). |
+| **Profile** | Per-column statistics: nulls, distinct counts, top values, numeric stats, mini histogram. |
 | **Table View** | Renders the incoming frame as a table. |
 | **Chart View** | Renders a chart (ECharts / Plotly / matplotlib). |
 | **Explore** | Publishes the frame to the report viewer as a PyGWalker drag-and-drop explorer. |
@@ -95,6 +97,21 @@ df = (t.filter(t.reference_date >= "2026-01-01")
         .aggregate(loans=t.total_loans_count.sum()))
 ```
 
+### Engines from plugins
+
+The five engines above are built in, but the engine list is extensible. A plugin
+is an ordinary Python package that registers an engine through the
+[plugin contract](PLUGINS.md); installing it makes the engine appear in the
+picker with a 🧩 badge — no changes to SFS. Engines can also declare **form
+fields** (a target column dropdown, a model selector, numbers, toggles) that
+appear above the code editor.
+
+Crucially, a plugin can run its work in **its own virtual environment**, with the
+frame handed over as an Arrow file. The SFS process never imports the library, so
+packages with aggressive version pins can be used without destabilising the ETL
+environment. `plugins/sfs-plugin-sklearn` ships both an in-process and an
+isolated variant of the same engine as a reference.
+
 **Which engine when?**
 
 - Small/medium data, arbitrary Python, API calls → **pandas**
@@ -143,6 +160,34 @@ A processor can fan out to multiple downstream branches, which run independently
 **Release & run this branch** (right-click a hard Stop) flips it to tap and runs just that branch — the workflow for "I stopped this branch, inspected it, now let it through" without re-running the expensive upstream.
 
 ---
+
+## Conditional branching — the Router node
+
+A Router sends the flow down one of several paths depending on the data. Each
+branch has a label and a Python expression evaluated against the incoming frame;
+the first expression that is true wins, and the other branches are skipped for
+that run.
+
+```
+[Load] → [Router]  ──empty──→  [Alert: no data arrived]
+                   ──large──→  [Full reprocess]
+                   ──else───→  [Normal incremental load]
+```
+
+Configure branches in the node panel. Each branch becomes a connection point on
+the right edge of the node, so you wire them visually. Expressions see the frame
+as `df` plus everything else injected into node code:
+
+```python
+len(df) == 0                      # nothing arrived
+df.amount.sum() > 1_000_000       # threshold
+df.status.eq('error').any()       # contains failures
+vars['env'] == 'prod'             # a global variable
+```
+
+Branches that aren't taken are skipped, **but a node that several branches feed
+into still runs** — so you can fan out and merge back. After a run, the node
+shows which branch was taken.
 
 ## Writing data fast — `fast_write`
 

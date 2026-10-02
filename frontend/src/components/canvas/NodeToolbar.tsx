@@ -1,4 +1,4 @@
-import { Zap, Code2, OctagonX, Table2, BarChart3, Compass, LayoutDashboard, StickyNote, ScanSearch, Boxes, Trash2, Sparkles, DatabaseZap, Wand2, HardDriveDownload } from 'lucide-react'
+import { Zap, Code2, OctagonX, Table2, BarChart3, Compass, LayoutDashboard, StickyNote, ScanSearch, Boxes, Trash2, Sparkles, DatabaseZap, Wand2, HardDriveDownload, GitBranch } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useStore } from '@/store'
 import { api } from '@/utils/api'
@@ -7,6 +7,7 @@ const NODES = [
   { type: 'trigger',   label: 'Trigger',    icon: <Zap size={13} />,       color: 'border-node-triggerBorder text-sky-300 bg-node-trigger' },
   { type: 'processor', label: 'Processor',  icon: <Code2 size={13} />,      color: 'border-node-processorBorder text-emerald-300 bg-node-processor' },
   { type: 'stop',      label: 'Stop / Tap', icon: <OctagonX size={13} />,   color: 'border-node-stopBorder text-orange-300 bg-node-stop' },
+  { type: 'router',    label: 'Router',     icon: <GitBranch size={13} />,  color: 'border-amber-500/50 text-amber-300 bg-amber-950/40' },
   { type: 'table_out', label: 'Table View', icon: <Table2 size={13} />,     color: 'border-node-tableOutBorder text-indigo-300 bg-node-tableOut' },
   { type: 'profile_out', label: 'Profile',   icon: <ScanSearch size={13} />,     color: 'border-cyan-500/50 text-cyan-300 bg-cyan-950/40' },
   { type: 'chart_out', label: 'Chart View', icon: <BarChart3 size={13} />,  color: 'border-node-chartOutBorder text-fuchsia-300 bg-node-chartOut' },

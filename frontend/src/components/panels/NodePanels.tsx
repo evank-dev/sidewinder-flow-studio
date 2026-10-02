@@ -927,3 +927,97 @@ export function ReportPanel({ nodeId }: { nodeId: string }) {
     </div>
   )
 }
+
+
+// ── Router ────────────────────────────────────────────────────────────────────
+
+export function RouterPanel({ nodeId }: { nodeId: string }) {
+  const { activeFlowId, updateNodeData } = useStore()
+  const data = useNodeData(nodeId)
+  const [label, setLabel] = useState<string>(data.label ?? 'Router')
+  const [branches, setBranches] = useState<any[]>(data.branches ?? [{ label: 'match', expr: 'len(df) > 0' }])
+  const [defaultLabel, setDefaultLabel] = useState<string>(data.default_label ?? 'else')
+
+  useEffect(() => {
+    setLabel(data.label ?? 'Router')
+    setBranches(data.branches ?? [{ label: 'match', expr: 'len(df) > 0' }])
+    setDefaultLabel(data.default_label ?? 'else')
+  }, [nodeId])
+
+  const save = (next?: { branches?: any[]; default_label?: string; label?: string }) => {
+    if (!activeFlowId) return
+    updateNodeData(activeFlowId, nodeId, {
+      label, branches, default_label: defaultLabel, ...next,
+    })
+  }
+
+  const setBranch = (i: number, patch: any) => {
+    const next = branches.map((b, j) => (j === i ? { ...b, ...patch } : b))
+    setBranches(next); save({ branches: next })
+  }
+  const addBranch = () => {
+    const next = [...branches, { label: `branch${branches.length + 1}`, expr: '' }]
+    setBranches(next); save({ branches: next })
+  }
+  const removeBranch = (i: number) => {
+    const next = branches.filter((_, j) => j !== i)
+    setBranches(next); save({ branches: next })
+  }
+
+  return (
+    <div className="p-4 space-y-3">
+      <h3 className="text-xs font-semibold text-muted uppercase tracking-wider">Router</h3>
+      <p className="text-xs text-muted">
+        Branches are tested top to bottom; the first expression that is true wins and
+        the other branches are skipped for that run. Expressions see the incoming
+        frame as <code className="text-accent">df</code>.
+      </p>
+
+      <div>
+        <label className="label">Label</label>
+        <input className="input" value={label}
+          onChange={(e) => setLabel(e.target.value)} onBlur={() => save()} />
+      </div>
+
+      <div className="space-y-2">
+        <label className="label">Branches</label>
+        {branches.map((b, i) => (
+          <div key={i} className="rounded-lg border border-canvas-border p-2 space-y-1.5">
+            <div className="flex items-center gap-2">
+              <input className="input text-xs font-mono flex-1" value={b.label ?? ''}
+                placeholder="name (handle)"
+                onChange={(e) => setBranch(i, { label: e.target.value })} />
+              <button className="btn-ghost p-1 text-red-400" title="Remove"
+                onClick={() => removeBranch(i)}>✕</button>
+            </div>
+            <input className="input text-xs font-mono" value={b.expr ?? ''}
+              placeholder="len(df) > 0"
+              onChange={(e) => setBranch(i, { expr: e.target.value })} />
+          </div>
+        ))}
+        <button className="btn-ghost text-xs w-full border border-canvas-border"
+          onClick={addBranch}>+ Add branch</button>
+      </div>
+
+      <div>
+        <label className="label">Default branch</label>
+        <input className="input text-xs font-mono" value={defaultLabel}
+          onChange={(e) => setDefaultLabel(e.target.value)}
+          onBlur={() => save({ default_label: defaultLabel })} />
+        <p className="text-xs text-muted mt-1">Taken when no expression matches.</p>
+      </div>
+
+      <div className="text-xs text-muted bg-canvas-bg rounded-lg border border-canvas-border p-2 space-y-0.5">
+        <div className="text-slate-300 font-medium">Examples</div>
+        <div><code className="text-accent">len(df) &gt; 0</code> — any rows?</div>
+        <div><code className="text-accent">df.amount.sum() &gt; 10000</code> — threshold</div>
+        <div><code className="text-accent">df.status.eq('error').any()</code> — contains errors</div>
+        <div><code className="text-accent">vars['env'] == 'prod'</code> — global variable</div>
+      </div>
+
+      <button className="btn-pri w-full" onClick={() => save()}>
+        <Save size={12} /> Save
+      </button>
+    </div>
+  )
+}

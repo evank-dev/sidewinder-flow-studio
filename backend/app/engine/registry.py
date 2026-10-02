@@ -169,6 +169,20 @@ class RegistryAPI:
     def __init__(self, source: str):
         self._source = source
 
+    @staticmethod
+    def run_isolated(**kwargs):
+        """Run work in a separate interpreter (its own venv) exchanging Arrow
+        files — see app/engine/runtime.py. Use this when your dependency would
+        conflict with SFS's own environment. Imported lazily so the registry
+        stays importable in minimal contexts."""
+        from app.engine.runtime import run_isolated as _ri
+        return _ri(**kwargs)
+
+    @staticmethod
+    def venv_python(venv: str):
+        from app.engine.runtime import venv_python as _vp
+        return _vp(venv)
+
     def register_engine(self, spec: EngineSpec, *, override: bool = False) -> None:
         spec.source = self._source
         register_engine(spec, override=override)

@@ -1,6 +1,6 @@
 import { useRef, useCallback, useEffect } from 'react'
 import { useStore } from '@/store'
-import { TriggerPanel, ProcessorPanel, StopPanel, ChartOutPanel, TableOutPanel, ExplorePanel, ReportPanel } from './NodePanels'
+import { TriggerPanel, ProcessorPanel, StopPanel, ChartOutPanel, TableOutPanel, ExplorePanel, ReportPanel , RouterPanel} from './NodePanels'
 import { AiStartPanel, AiStepPanel, AiEndPanel } from './AiNotePanels'
 import { OutputPanel }  from './OutputPanel'
 import { ImportsPanel } from './ImportsPanel'
@@ -30,6 +30,7 @@ function NodeProperties({ nodeId }: { nodeId: string }) {
     case 'table_out': return <TableOutPanel  nodeId={nodeId} />
     case 'explore_out': return <ExplorePanel nodeId={nodeId} />
     case 'report_out':  return <ReportPanel  nodeId={nodeId} />
+    case 'router':   return <RouterPanel nodeId={nodeId} />
     case 'ai_start': return <AiStartPanel nodeId={nodeId} />
     case 'ai_step':  return <AiStepPanel  nodeId={nodeId} />
     case 'ai_end':   return <AiEndPanel   nodeId={nodeId} />

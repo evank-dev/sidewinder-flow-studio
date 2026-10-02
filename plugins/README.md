@@ -6,7 +6,7 @@ package that registers one or more execution engines through the
 
 | Plugin | Engine | Status |
 |---|---|---|
-| [sfs-plugin-sklearn](sfs-plugin-sklearn) | `scikit-learn` — train models on the frame | reference implementation |
+| [sfs-plugin-sklearn](sfs-plugin-sklearn) | `scikit-learn` (in-process) and `scikit-learn (isolated)` | reference implementation |
 
 ## Installing
 
@@ -29,8 +29,23 @@ Plugins here run **in-process**: their dependencies install into SFS's own
 environment. That is fine for libraries that coexist with the core stack
 (scikit-learn does).
 
-Libraries with aggressive version pins — PyCaret is the usual offender — will be
-served by the planned **isolated runtime**, where the library lives in its own
-virtual environment and frames cross as Arrow files, leaving the core
-environment untouched. The registration contract is the same; only the engine's
-`run` differs.
+Libraries with aggressive version pins — PyCaret is the usual offender — should
+use the **isolated runtime** instead: the library lives in its own virtual
+environment and frames cross as Arrow files, leaving the core environment
+untouched. The registration contract is the same; only the engine's `run`
+differs (it calls `api.run_isolated(...)`).
+
+`sfs-plugin-sklearn` ships both variants so you can compare them:
+
+| Engine | Where it runs |
+|---|---|
+| `sklearn` | in-process, shares SFS's environment |
+| `sklearn_isolated` | separate venv via `runner.py`, Arrow handoff |
+
+Set up an environment once:
+
+```bash
+export SFS_PLUGIN_VENVS_DIR=./plugin_venvs
+python -m venv $SFS_PLUGIN_VENVS_DIR/sklearn
+$SFS_PLUGIN_VENVS_DIR/sklearn/bin/pip install pyarrow pandas scikit-learn
+```

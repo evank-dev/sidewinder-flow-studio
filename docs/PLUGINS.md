@@ -195,6 +195,61 @@ Rules:
 
 ---
 
+## Isolated runtime
+
+For libraries whose pins would fight SFS's own environment (PyCaret is the usual
+offender), run the work in a **separate interpreter** — its own virtual
+environment — exchanging Arrow files. SFS never imports the library.
+
+Your engine's `run` becomes a thin client:
+
+```python
+def run_my_engine(ec):
+    table, info = api.run_isolated(
+        venv="mylib",                    # folder under SFS_PLUGIN_VENVS_DIR, or a path
+        runner=_runner_path(),           # a script shipped with YOUR package
+        inputs=[ec.df_in],
+        params=ec.params,
+        code=ec.code,
+    )
+    return table                          # declare output_mode="arrow"
+```
+
+Create the environment once, with whatever versions the library demands:
+
+```bash
+python -m venv $SFS_PLUGIN_VENVS_DIR/mylib
+$SFS_PLUGIN_VENVS_DIR/mylib/bin/pip install pyarrow pandas mylib==1.2.3
+```
+
+### Runner contract
+
+SFS writes a job directory and invokes `<venv>/bin/python <runner.py> <request.json>`:
+
+| File | Contents |
+|---|---|
+| `input.arrow`, `input2.arrow`, … | upstream frames (Arrow IPC) |
+| `request.json` | `{inputs[], output, params, code, meta}` |
+| `output.arrow` | **your runner writes this** |
+
+The runner prints one JSON line when done:
+
+```json
+{"ok": true, "rows": 1234, "log": "optional"}
+{"ok": false, "error": "target column missing"}
+```
+
+Everything else it prints is captured and shown as node logs, so `print()` still
+works. Failures — a crash, a timeout, a missing output frame, no JSON response —
+all surface as a clear message on the node. Job directories are removed
+afterwards.
+
+`plugins/sfs-plugin-sklearn` ships both variants: `sklearn` (in-process) and
+`sklearn_isolated` (separate venv), sharing one `runner.py`. Compare them for a
+concrete example.
+
+---
+
 ## Data contract
 
 Between nodes, SFS passes exactly one frame, cached as an **Arrow IPC file**.

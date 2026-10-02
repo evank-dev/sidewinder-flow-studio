@@ -42,9 +42,9 @@ SQL pushdown (SQLGlot dialect transpilation) · Ibis pushdown
 Snowflake, BigQuery, Redshift, ClickHouse, StarRocks, Doris, Trino, Databricks,
 Azure Data Lake, Delta Lake, Apache Iceberg
 
-**Nodes** — Trigger (manual/cron) · Processor · Stop/Tap · Table View · Chart ·
-Profile (column stats) · Explore (PyGWalker) · Report (Streamlit) · Annotations ·
-AI flow-design notes
+**Nodes** — Trigger (manual/cron) · Processor · **Router** (conditional branching) ·
+Stop/Tap · Table View · Chart · Profile (column stats) · Explore (PyGWalker) ·
+Report (Streamlit) · Annotations · AI flow-design notes
 
 **Workflow** — multi-input joins/unions · persist & resume checkpoints ·
 shared functions · custom reusable processors · run history · scheduling
@@ -53,7 +53,9 @@ shared functions · custom reusable processors · run history · scheduling
 a local Ollama model), or sketch a whole flow with AI notes and compile it
 
 **Extensible** — add engines via a documented [plugin contract](docs/PLUGINS.md);
-`/api/capabilities` surfaces them in the UI automatically
+`/api/capabilities` surfaces them in the UI automatically. Engines can declare
+form parameters, and can run in an **isolated virtual environment** so heavy
+libraries (PyCaret, scikit-learn…) never disturb the ETL environment
 
 ---
 
@@ -119,15 +121,54 @@ fast_write(df, "warehouse", "public.sales", mode="replace")
 
 ---
 
+## Before you deploy it — please read
+
+SFS runs the code you put in nodes. A few consequences are worth stating plainly
+rather than leaving you to discover them.
+
+**Node code is as privileged as a shell on the backend host.** Processor code is
+executed with normal Python available: it can read the filesystem, make network
+calls, read `.env`, and decrypt any stored connection credentials. Per-node
+scopes isolate *variable names*, not permissions — it is not a security sandbox.
+Authentication (planned) will not change this: any user allowed to edit a flow is
+effectively trusted with the backend host. **Treat flow-edit access as equivalent
+to shell access.** Run SFS for trusted developers, on isolated infrastructure,
+with narrowly scoped database credentials — not as an open shared service.
+
+**Node boundaries materialise the full frame.** Polars collects with its
+streaming engine and DuckDB spills to disk, so an individual node can handle data
+larger than RAM. But every node's output is written to the Arrow cache in full —
+that is exactly what makes inspect-and-rerun possible. Streaming end-to-end and
+inspectability are in tension; SFS deliberately chose inspectability. For very
+large tables, use the SQL/Ibis pushdown engines to transform in the warehouse and
+bring back only the results.
+
+**Execution is sequential.** The executor walks the graph in dependency order,
+one node at a time. Independent branches do not currently run in parallel, and
+there is no distributed execution — worker-queue scaling is on the roadmap.
+
+**Scheduled retries re-run the whole flow.** A retry re-executes from the start,
+not from the failed node. Make writes idempotent before enabling retries:
+`fast_write(..., mode="replace")` is safe to repeat, `mode="append"` will
+duplicate rows. Nodes that already succeeded before the failure will run again.
+
+**Metadata defaults to SQLite** (single writer). Set `METADATA_DB_URL` to
+PostgreSQL for anything beyond single-user use.
+
 ## Status & roadmap
 
-Working today: everything in Features above.
+Working today: everything in Features above, including the plugin system with
+isolated runtimes.
 
-Planned: isolated plugin runtimes (run PyCaret/scikit-learn/statsmodels in their
-own pinned environments without breaking your ETL env), auth/SSO, worker-queue
-scaling, a semantic catalog exposed over MCP, and a desktop build.
+Planned: auth/SSO and RBAC, worker-queue scaling, resume-from-failed-node, a
+semantic catalog exposed over MCP, and a desktop build.
 
-See [EDITIONS.md](EDITIONS.md) for the full picture.
+[EDITIONS.md](EDITIONS.md) maps every capability to its edition and implementation
+status. One thing it makes explicit and worth repeating here: features labelled
+"enterprise" (SQL/Ibis pushdown, the advanced scheduler) **currently ship in this
+open repository with no licence gate**. They work today. Nothing presently in the
+open repo will be removed from it retroactively; any future paid packaging would
+apply to new capabilities.
 
 ---
 

@@ -12,6 +12,7 @@ import { StopNode, TableOutNode, ChartOutNode, ProfileNode } from '@/components/
 import { ExploreNode, ReportNode } from '@/components/nodes/ReportNodes'
 import { AnnotationNode } from '@/components/nodes/AnnotationNode'
 import { AiStartNode, AiStepNode, AiEndNode } from '@/components/nodes/AiNotes'
+import { RouterNode } from '@/components/nodes/RouterNode'
 import { FlowEdge }      from './FlowEdge'
 import { ContextMenu }   from './ContextMenu'
 import { useStore, registerCanvasCallbacks, unregisterCanvasCallbacks } from '@/store'
@@ -29,6 +30,7 @@ const NODE_TYPES = {
   ai_start: AiStartNode,
   ai_step: AiStepNode,
   ai_end: AiEndNode,
+  router: RouterNode,
 }
 const EDGE_TYPES = { default: FlowEdge }
 
@@ -45,6 +47,7 @@ const NODE_DEFAULTS: Record<string, object> = {
   ai_start: { label: 'Source', source_mode: 'sql' },
   ai_step:  { label: 'Transform', logic: '' },
   ai_end:   { label: 'Load', target_mode: 'db', write_mode: 'replace' },
+  router:   { label: 'Router', branches: [{ label: 'match', expr: 'len(df) > 0' }], default_label: 'else' },
 }
 
 interface CanvasInnerProps { flowId: string }
@@ -192,7 +195,7 @@ function CanvasInner({ flowId }: CanvasInnerProps) {
             stop:      '#fb923c', table_out: '#818cf8', chart_out: '#e879f9',
             explore_out: '#2dd4bf', report_out: '#f472b6',
             annotation: '#475569', profile_out: '#22d3ee',
-            ai_start: '#8b5cf6', ai_step: '#8b5cf6', ai_end: '#8b5cf6',
+            ai_start: '#8b5cf6', ai_step: '#8b5cf6', ai_end: '#8b5cf6', router: '#f59e0b',
           }[n.type ?? ''] ?? '#2d3a52')}
           className="!bg-surface !border-canvas-border"
         />

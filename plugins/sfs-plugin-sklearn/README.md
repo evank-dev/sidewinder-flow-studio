@@ -65,6 +65,28 @@ feature columns are dropped — encode them upstream if you need them.
 
 As with every engine, **only `df` passes downstream**, so leave your result there.
 
+## The isolated variant
+
+The package registers two engines from the same code:
+
+- **scikit-learn** — runs in SFS's process (fast, shares the environment)
+- **scikit-learn (isolated)** — runs `runner.py` inside a separate virtual
+  environment; SFS hands the frame over as an Arrow file and never imports
+  scikit-learn
+
+To use the isolated one, create its environment and tell SFS where venvs live:
+
+```bash
+export SFS_PLUGIN_VENVS_DIR=./plugin_venvs
+python -m venv $SFS_PLUGIN_VENVS_DIR/sklearn
+$SFS_PLUGIN_VENVS_DIR/sklearn/bin/pip install pyarrow pandas scikit-learn
+```
+
+The node's **Plugin environment** field takes the folder name (`sklearn`) or an
+absolute path. Everything else — the target dropdown, the model selector, the
+code cell — works identically; your code simply executes in the other
+interpreter.
+
 ## A note on isolation
 
 This plugin runs **in-process**: scikit-learn is installed into SFS's own

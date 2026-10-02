@@ -65,6 +65,9 @@ REPORTS_URL=http://localhost:8501
 # Optional: AI agent (or configure providers in the UI instead)
 ANTHROPIC_API_KEY=
 
+# Optional: where isolated plugin virtual environments live
+SFS_PLUGIN_VENVS_DIR=./plugin_venvs
+
 # Optional: enterprise scheduler failure alerts
 SLACK_WEBHOOK_URL=
 SMTP_HOST=
@@ -224,6 +227,49 @@ PostgreSQL, MySQL, SQLite, and Druid basics work out of the box.
 > **SQL Server note:** `pyodbc` needs the Microsoft ODBC Driver 18 installed at the OS level — that part can't come from pip.
 
 ---
+
+## Plugins (optional)
+
+Engine plugins are ordinary Python packages installed alongside SFS. The bundled
+example adds a scikit-learn engine:
+
+```bash
+pip install -e plugins/sfs-plugin-sklearn
+```
+
+Restart SFS — the engine appears in the node picker. Check what's registered:
+
+```bash
+curl -s localhost:8000/api/capabilities | python -m json.tool
+```
+
+### Isolated plugin environments
+
+A plugin can run in **its own virtual environment** so its dependencies never
+touch SFS's. Create one per plugin under a directory of your choosing and point
+SFS at it:
+
+```bash
+export SFS_PLUGIN_VENVS_DIR=./plugin_venvs      # or /opt/sfs-venvs in Docker
+
+python -m venv $SFS_PLUGIN_VENVS_DIR/sklearn
+$SFS_PLUGIN_VENVS_DIR/sklearn/bin/pip install pyarrow pandas scikit-learn
+```
+
+Then pick the **scikit-learn (isolated)** engine on a node; its "Plugin
+environment" field takes the folder name (`sklearn`) or an absolute path. SFS
+hands the frame over as an Arrow file and never imports the library itself.
+
+In Docker, build the venvs into the image (or mount them) and set the variable in
+`docker-compose.yml`:
+
+```dockerfile
+RUN python -m venv /opt/sfs-venvs/sklearn \
+ && /opt/sfs-venvs/sklearn/bin/pip install --no-cache-dir pyarrow pandas scikit-learn
+ENV SFS_PLUGIN_VENVS_DIR=/opt/sfs-venvs
+```
+
+See [PLUGINS.md](PLUGINS.md) to write your own.
 
 ## Verifying the install
 

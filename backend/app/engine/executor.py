@@ -59,6 +59,22 @@ def parents_of(node_id: str, edges: list[dict]) -> list[str]:
     return [e["source"] for e in edges if e["target"] == node_id]
 
 
+def descendants_from(starts, edges: list[dict]) -> set[str]:
+    """All nodes reachable from any of `starts`, including the starts."""
+    adj: dict[str, list[str]] = defaultdict(list)
+    for e in edges:
+        adj[e["source"]].append(e["target"])
+    seen: set[str] = set()
+    stack = list(starts)
+    while stack:
+        n = stack.pop()
+        if n in seen:
+            continue
+        seen.add(n)
+        stack.extend(adj[n])
+    return seen
+
+
 def descendants_of(node_id: str, edges: list[dict]) -> set[str]:
     """All nodes reachable downstream from node_id (its sub-tree)."""
     adj: dict[str, list[str]] = defaultdict(list)
@@ -985,6 +1001,63 @@ async def execute_flow(
                 continue
 
             # ── Stop / Tap ────────────────────────────────────────────────────
+            # ── Router (conditional branching) ────────────────────────────────
+            elif node_type == "router":
+                df_out   = df_in if df_in is not None else pd.DataFrame()
+                rows_out = len(df_out)
+                branches = data.get("branches") or []
+                default_label = data.get("default_label") or "else"
+
+                # Evaluate each branch's expression in order; first truthy wins.
+                # Expressions see the frame as `df` plus the injected context
+                # (pd, vars, helpers), so `len(df) > 0` or
+                # `df.amount.sum() > 1000` both work.
+                chosen, errors = None, []
+                eval_scope = {**ctx, "df": df_out}
+                for br in branches:
+                    lbl = (br.get("label") or "").strip()
+                    expr = (br.get("expr") or "").strip()
+                    if not lbl or not expr:
+                        continue
+                    try:
+                        if bool(eval(expr, eval_scope)):  # noqa: S307
+                            chosen = lbl
+                            break
+                    except Exception as exc:
+                        errors.append(f"{lbl}: {type(exc).__name__}: {exc}")
+                if chosen is None:
+                    chosen = default_label
+
+                store_frame(project_id, node_id, df_out)
+
+                # Block every branch that was not selected. A node is only
+                # blocked if it is unreachable via the chosen branch, so a
+                # downstream node both branches feed into still runs.
+                taken, not_taken = [], []
+                for e in edges:
+                    if e.get("source") != node_id:
+                        continue
+                    handle = e.get("sourceHandle") or default_label
+                    (taken if handle == chosen else not_taken).append(e.get("target"))
+                if not_taken:
+                    keep = descendants_from(taken, edges)
+                    blocked |= (descendants_from(not_taken, edges) - keep)
+
+                duration_ms = round((time.perf_counter() - t0) * 1000)
+                await ws_manager.broadcast(flow_id, {
+                    "type": "node_routed",
+                    "node_id": node_id, "label": label,
+                    "chosen": chosen, "row_count": rows_out,
+                    "errors": errors, "duration_ms": duration_ms,
+                })
+                results.append({
+                    "node_id": node_id, "node_type": node_type, "status": "ok",
+                    "rows_in": rows_in, "rows_out": rows_out,
+                    "duration_ms": duration_ms, "chosen_branch": chosen,
+                    "detail": "; ".join(errors) if errors else None,
+                })
+                continue
+
             elif node_type == "stop":
                 mode     = data.get("mode", "hard")
                 import logging

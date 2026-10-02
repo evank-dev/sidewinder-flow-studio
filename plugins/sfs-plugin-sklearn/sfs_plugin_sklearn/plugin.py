@@ -174,6 +174,34 @@ def run_sklearn(ec):
     return result
 
 
+# ── Isolated variant ──────────────────────────────────────────────────────────
+# Same capability, but executed in a separate interpreter with its own pinned
+# dependencies. SFS hands the frame over as an Arrow file and never imports
+# scikit-learn itself. This is the pattern for libraries that would otherwise
+# fight the core environment (PyCaret and friends).
+
+def _runner_path() -> str:
+    import os
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "runner.py")
+
+
+def make_run_isolated(api):
+    def run_sklearn_isolated(ec):
+        venv = (ec.params or {}).get("venv") or "sklearn"
+        table, info = api.run_isolated(
+            venv=venv,
+            runner=_runner_path(),
+            inputs=[ec.df_in] if ec.df_in is not None else [],
+            params=ec.params or {},
+            code=ec.code,
+            meta={"node": ec.node_data.get("label")},
+        )
+        if info.get("log"):
+            print(info["log"])
+        return table
+    return run_sklearn_isolated
+
+
 def register(api):
     """Entry point called once by SFS at startup.
 
@@ -203,6 +231,34 @@ def register(api):
              "default": "auto"},
             {"key": "test_size", "label": "Test size", "type": "number",
              "default": 0.2, "help": "Hold-out fraction used for the metrics."},
+            {"key": "show_metrics", "label": "Print metrics to the log",
+             "type": "boolean", "default": True},
+        ),
+    ))
+
+    # The isolated twin. Declared separately so users can choose: in-process
+    # (fast, shares the core environment) or isolated (safe for conflicting
+    # dependencies). `requires` is empty because nothing is imported in-process.
+    api.register_engine(api.EngineSpec(
+        name="sklearn_isolated",
+        label="scikit-learn (isolated)",
+        description="Runs in its own venv — core env untouched",
+        run=make_run_isolated(api),
+        input_mode="pandas",
+        output_mode="arrow",     # the runner hands back an Arrow table
+        language="python",
+        tier="free",
+        hint=HINT,
+        params=(
+            {"key": "venv", "label": "Plugin environment", "type": "string",
+             "default": "sklearn",
+             "help": "Folder name under SFS_PLUGIN_VENVS_DIR, or an absolute path."},
+            {"key": "target", "label": "Target column", "type": "column",
+             "help": "Leave the code cell empty to just train on this target."},
+            {"key": "kind", "label": "Model", "type": "select",
+             "options": ["auto", "rf_classifier", "rf_regressor", "logistic", "linear"],
+             "default": "auto"},
+            {"key": "test_size", "label": "Test size", "type": "number", "default": 0.2},
             {"key": "show_metrics", "label": "Print metrics to the log",
              "type": "boolean", "default": True},
         ),

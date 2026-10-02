@@ -37,6 +37,8 @@ These are the complete, genuinely useful free product. Nothing here is crippled.
 - ✅ Input-variable chips in the processor panel
 - ✅ Annotation notes (colored, resizable, render behind, never execute)
 - ✅ Run-from-here / resume / branch execution controls
+- ✅ **Router node** — conditional branching; expressions evaluated against `df`,
+  one source handle per branch, untaken branches skipped
 
 ### Execution engines (per-processor choice)
 - ✅ **pandas** — full Python
@@ -76,6 +78,12 @@ These are the complete, genuinely useful free product. Nothing here is crippled.
 - ✅ **Engine registry + plugin system** — add engines via `sfs.plugins` entry
   points, no core changes (docs/PLUGINS.md)
 - ✅ `/api/capabilities` — engines/plugins/features discovery; UI renders from it
+- ✅ **Declarative engine parameters** — engines declare form fields (string,
+  number, boolean, select, column, connection) rendered above the code editor
+- ✅ **Isolated plugin runtime** — run a plugin in its own virtual environment,
+  exchanging Arrow files, so heavy/conflicting dependencies never enter the core
+  environment (`app/engine/runtime.py`); reference implementation in
+  `plugins/sfs-plugin-sklearn`
 
 ### Productivity
 - ✅ Shared functions / imports preamble (flow-level)
@@ -108,9 +116,14 @@ These are the complete, genuinely useful free product. Nothing here is crippled.
 | **Pro scheduler** — calendar rules (weekdays-only, skip-dates) | ✅ | 🔗 Embedded | In `scheduler.py`. |
 | **Pro scheduler** — per-attempt run history/audit | ✅ | 🔗 Embedded | Shared with the free Runs panel (the panel is free; retries/alerts are the paid part). |
 
-> All six above are **gated by a simple check, not a license** — today anyone
-> running the open code can use them. Making them paid requires (a) the plugin
-> split and (b) the licensing system, both below.
+> All six above are **gated by a simple check, not a licence** — today anyone
+> running the open code can use them, and they work fully. Making them paid would
+> require (a) extracting them into a plugin package and (b) a licensing system,
+> neither of which exists yet.
+>
+> **Commitment:** functionality already published in the open repository will not
+> be retroactively removed from it. Any future paid packaging would apply to new
+> capabilities, not to what is already here.
 
 ### Planned (not yet built)
 
@@ -121,7 +134,7 @@ These are the complete, genuinely useful free product. Nothing here is crippled.
 | **Auth — local** (argon2 + JWT), login, WS token validation | ⬜ | 🧩 Plugin | Interface stub in open core, impl in enterprise. |
 | **Auth — SSO/OIDC** (Azure AD etc.) | ⬜ | 🧩 Plugin | The #1 enterprise procurement ask. |
 | **RBAC** (viewer/editor/admin; viewers see reports only) | ⬜ | 🧩 Plugin | Pairs with reports. |
-| **Isolated plugin runtime** — one container, multiple pinned venvs, Arrow/parquet handoff (PyCaret, Prophet, statsmodels…) | ⬜ | 🧩 Separate container | Curated, version-tested heavy libs without breaking the app. |
+| **Isolated plugin runtime** — separate venv per plugin, Arrow file handoff | ✅ | 🧩 Open core | DONE — `app/engine/runtime.py`, exposed to plugins as `api.run_isolated()`. The *mechanism* is open; curated, version-tested plugin bundles remain the intended paid layer. |
 | **Worker queue scaling** — Celery/RQ workers, Postgres metadata, shared frame store | ⬜ | 🧩 Plugin + infra | Removes the single-process concurrency ceiling. |
 | **Vector/MCP semantic catalog** — profile tables + DAG lineage → catalog → expose as MCP server for AI tools | ⬜ | 🧩 Plugin | Flagship AI-native differentiator. |
 | **Pushdown-aware profiling** — compute stats in-database, return only the stats | ⬜ | 🧩 Plugin | Pairs with catalog + pushdown engines. |
@@ -129,6 +142,9 @@ These are the complete, genuinely useful free product. Nothing here is crippled.
 | **Power BI semantic model read** (XMLA/TMDL/DAX) | ⬜ | 🧩 Plugin | Read feasible; writing cautioned (governance). |
 | **StarRocks Stream Load / MySQL LOAD DATA** — best-tier bulk paths | ⬜ | 🔗 in `fast_write` | Optimizes existing dispatcher. |
 | **`fast_read`** (ConnectorX Arrow-native fast source reads) | ⬜ | 🔗 in helpers | Symmetric to fast_write. |
+| **Parallel branch execution** — run independent branches concurrently | ⬜ | Core (open) | Executor is currently strictly sequential. |
+| **Resume from failed node** — scheduled retries re-run only what failed | ⬜ | Core (open) | Today a retry re-runs the whole flow; writes must be idempotent. |
+| **Automated tests + CI** | ⬜ | Core (open) | No test suite yet — the most visible gap for contributors. |
 | **Desktop app** (Electron/Tauri) — education/free tier | ⬜ | Packaging | Independent track. |
 
 ---
@@ -155,11 +171,10 @@ community, and open connectors are table stakes.
 To move from "one embedded codebase" to "open core (public) + enterprise
 plugins (private)", in order:
 
-1. **Engine-registry refactor** — replace the `if engine == "sql"/"ibis"`
-   branches in `executor.py` with an `ENGINES` dict that plugins extend.
-2. **Plugin loader** — discover enterprise packages via Python entry points at
-   startup; add `/api/capabilities` so the frontend renders available
-   engines/features dynamically.
+1. ✅ **Engine-registry refactor** — DONE. `executor.py` dispatches through
+   `app/engine/registry.py`; builtins register like any plugin.
+2. ✅ **Plugin loader** — DONE. Entry-point group `sfs.plugins`, plus
+   `/api/capabilities` so the frontend renders engines dynamically.
 3. **Extract embedded enterprise code** — move SQL/Ibis engines and the pro
    scheduler features out of core files into an enterprise plugin package.
 4. **Licensing library** — Ed25519 sign/verify, offline.

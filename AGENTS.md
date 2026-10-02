@@ -58,7 +58,7 @@ trigger (manual/cron; enterprise scheduler fields: retries, retry_backoff_sec,
 alert_on_failure, alert_email, weekdays_only, skip_dates) · processor (code +
 engine + optional persist config) · stop (mode hard|tap) · table_out ·
 chart_out (set `result` to an echarts dict / plotly fig / matplotlib) ·
-profile_out (auto per-column stats) · explore_out (PyGWalker) · report_out
+router (conditional branching: branches[{label,expr}] + default_label; edge.sourceHandle is the branch label; untaken branches are blocked) · profile_out (auto per-column stats) · explore_out (PyGWalker) · report_out
 (Streamlit code; `st`, `df`, `pd` injected) · annotation (text only; never
 executes) · ai_start / ai_step / ai_end (design-time specs compiled to
 processors by "Build with AI"; skipped at run time until built).
@@ -70,6 +70,12 @@ Node = { id, type, position, data{ label, code, engine, … } }.
 Edge = { id, source, target }. Only `df` crosses edges (see contract).
 
 ## Engines are pluggable (registry)
+
+Engines may also declare `params` — form fields (string, number, boolean, select,
+column, connection) rendered above the code editor and delivered resolved in
+`ec.params` — and may run their work in a separate virtual environment via
+`api.run_isolated(...)`, exchanging Arrow files so the core process never imports
+the dependency. See app/engine/runtime.py and docs/PLUGINS.md.
 
 Engines are NOT a hard-coded if/elif chain. Each is an `EngineSpec` registered
 in `app/engine/registry.py` (builtins register in `executor.py`); the executor
@@ -123,6 +129,21 @@ thousand rows, `fast_write` is the rule, not the exception.
 For upserts/merges, load into a temp/staging table with `fast_write` then run
 the merge SQL via a SQL-engine node or `get_engine(...).begin()` — don't try to
 express upserts through pandas.
+
+## Execution model — what agents must not assume
+
+- **Sequential.** The executor walks the graph in dependency order, one node at a
+  time. Independent branches do NOT run in parallel.
+- **Every node boundary materialises a full frame** to the Arrow cache. Polars
+  streams and DuckDB spills *within* a node, but nothing streams across nodes.
+  For very large tables use the `sql`/`ibis` pushdown engines rather than pulling
+  rows through local frames.
+- **Scheduled retries re-run the whole flow**, not just the failed node. Generated
+  write code should be idempotent — prefer `fast_write(..., mode="replace")`; an
+  `append` that reruns will duplicate rows.
+- **`exec()` is not a sandbox.** Node code runs with the backend process's
+  privileges and can read `.env` and decrypt stored credentials. Never generate
+  code that exfiltrates credentials or reaches outside the task.
 
 ## Rules for generated node code
 

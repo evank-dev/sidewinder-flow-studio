@@ -455,6 +455,19 @@ export const useStore = create<AppState>((set, get) => ({
           },
         }))
         break
+      case 'node_routed':
+        set((s) => ({
+          execState: {
+            ...s.execState,
+            [event.node_id]: {
+              status: 'ok',
+              rows_out: (event as any).row_count,
+              duration_ms: event.duration_ms,
+              chosen: (event as any).chosen,
+            },
+          },
+        }))
+        break
       case 'node_stopped':
         set((s) => ({
           execState: {
