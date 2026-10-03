@@ -40,6 +40,10 @@ class EngineContext:
     exec_globals: dict                     # injected names (pd, get_engine, …)
     preamble: str = ""                     # flow imports + shared functions
     params: dict = field(default_factory=dict)  # declared params, defaults applied
+    # Where this node's output will be cached. An engine MAY stream its result
+    # straight here (and declare output_mode="file") instead of returning a
+    # frame, which avoids materialising the result in memory.
+    output_path: str | None = None
     # input_mode="pandas"
     df_in: Any = None
     df_extra: list = field(default_factory=list)

@@ -97,10 +97,10 @@ async def _run_scheduled(project_id: str, flow_id: str):
 
     async with AsyncSessionLocal() as db:
         conns = (await db.execute(select(Connection))).scalars().all()
-        urls = {c.name: build_url(c) for c in conns}
-        dialects = {c.name: c.dialect for c in conns}
-        storage = {c.name: get_storage_options(c) for c in conns if c.dialect == "adls"}
-        cargs = {c.name: get_connect_args(c) for c in conns}
+        from app.services.connection_service import connection_maps
+        _m = connection_maps(conns)
+        urls, dialects = _m["urls"], _m["dialects"]
+        storage, cargs = _m["storage"], _m["cargs"]
 
     max_attempts = cfg["retries"] + 1
     for attempt in range(1, max_attempts + 1):

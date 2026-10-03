@@ -10,6 +10,7 @@ export function TopBar() {
     saveProject, runFlow, clearExecState,
     addFlow, deleteFlow, toggleFlowActive, setActiveFlow,
     renameFlow, activeFlow,
+    runError, clearRunError,
   } = useStore()
 
   const [showProjects, setShowProjects] = useState(false)
@@ -61,6 +62,15 @@ export function TopBar() {
   }, [showProjects])
 
   return (
+    <>
+    {runError && (
+      <div role="alert"
+        className="flex items-start gap-3 px-4 py-2 bg-red-950/70 border-b border-red-500/40 text-red-200 text-xs z-30 shrink-0">
+        <span className="font-semibold shrink-0">⚠</span>
+        <span className="flex-1 whitespace-pre-wrap break-words">{runError}</span>
+        <button onClick={clearRunError} className="shrink-0 text-red-300 hover:text-white" title="Dismiss">✕</button>
+      </div>
+    )}
     <header className="flex items-center gap-2 px-4 py-2 bg-surface border-b border-canvas-border z-20 shrink-0">
       {/* Brand — click for About */}
       <div
@@ -254,5 +264,6 @@ export function TopBar() {
         )}
       </div>
     </header>
+    </>
   )
 }

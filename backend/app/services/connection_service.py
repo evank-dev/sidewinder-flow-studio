@@ -1,5 +1,5 @@
 import json, uuid, base64
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
@@ -15,8 +15,22 @@ def encrypt(s: str) -> str:
     return _fernet().encrypt(s.encode()).decode()
 
 
+BROKEN_URL_PREFIX = "sfs-broken://"
+
+
+class CredentialError(ValueError):
+    """A stored credential exists but cannot be used (wrong SECRET_KEY etc)."""
+
+
 def decrypt(s: str) -> str:
-    return _fernet().decrypt(s.encode()).decode()
+    try:
+        return _fernet().decrypt(s.encode()).decode()
+    except InvalidToken:
+        raise CredentialError(
+            "its stored password can't be decrypted — SECRET_KEY has changed since "
+            "it was saved. Edit the connection and re-enter the password, or restore "
+            "the original SECRET_KEY in .env."
+        ) from None
 
 
 def build_url(conn: Connection) -> str:
@@ -259,8 +273,12 @@ async def test_connection(conn: Connection) -> dict:
             return {"ok": False, "error": str(e)}
 
     import sqlalchemy as sa
-    url = build_url(conn)
-    ca = get_connect_args(conn)
+    try:
+        url = build_url(conn)
+        ca = get_connect_args(conn)
+    except CredentialError as exc:
+        # Report the real cause instead of a 500 from the Test button
+        return {"ok": False, "error": f"Connection '{conn.name}': {exc}"}
     try:
         # Some dialects reject connect_timeout — retry without it.
         # Merge dialect-specific connect_args (e.g. Trino auth/verify/scheme).
@@ -276,3 +294,38 @@ async def test_connection(conn: Connection) -> dict:
         return {"ok": True, "error": None}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+
+def connection_maps(conns) -> dict:
+    """Build every per-connection map a run needs, isolating failures.
+
+    A connection whose credentials can't be used (most often: SECRET_KEY changed
+    since it was saved) must not break flows that never touch it. Such a
+    connection gets a sentinel URL carrying the reason; the error is raised only
+    if a node actually asks for it.
+    """
+    urls: dict[str, str] = {}
+    dialects: dict[str, str] = {}
+    cargs: dict[str, dict] = {}
+    storage: dict[str, dict] = {}
+    broken: dict[str, str] = {}
+    for c in conns:
+        dialects[c.name] = c.dialect
+        try:
+            urls[c.name] = build_url(c)
+        except Exception as exc:
+            reason = f"Connection '{c.name}' is unusable: {exc}"
+            urls[c.name] = BROKEN_URL_PREFIX + reason
+            broken[c.name] = reason
+            continue
+        try:
+            cargs[c.name] = get_connect_args(c)
+        except Exception:
+            cargs[c.name] = {}
+        if c.dialect == "adls":
+            try:
+                storage[c.name] = get_storage_options(c)
+            except Exception as exc:
+                broken[c.name] = f"Connection '{c.name}' is unusable: {exc}"
+    return {"urls": urls, "dialects": dialects, "cargs": cargs,
+            "storage": storage, "broken": broken}

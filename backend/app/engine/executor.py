@@ -16,14 +16,19 @@ import io
 import json
 import time
 import traceback
+import os
+import logging
 from collections import defaultdict, deque
+
+log_ = logging.getLogger("sfs.engine"), deque
 from typing import Any
 
 import pandas as pd
 import pyarrow as pa
 import sqlalchemy as sa
 
-from app.core.frame_cache import store_frame, load_frame, has_frame, load_frame_arrow, store_frame_arrow, frame_path
+from app.core.frame_cache import (store_frame, load_frame, has_frame, load_frame_arrow,
+                                  store_frame_arrow, frame_path, frame_dest_path)
 from app.engine.registry import (
     EngineSpec, EngineContext, register_engine, get_engine_spec,
 )
@@ -57,6 +62,60 @@ def topological_sort(nodes: list[dict], edges: list[dict]) -> list[str]:
 
 def parents_of(node_id: str, edges: list[dict]) -> list[str]:
     return [e["source"] for e in edges if e["target"] == node_id]
+
+
+def _parallel_enabled() -> bool:
+    """Opt-in concurrent execution of independent branches.
+
+    Off by default: the sequential path is the long-standing, well-tested
+    behaviour. Enable with SFS_PARALLEL_BRANCHES=1 to use multiple cores when a
+    flow fans out into branches that do not depend on each other.
+    """
+    return os.environ.get("SFS_PARALLEL_BRANCHES", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _dependency_layers(order: list[str], edges: list[dict]) -> list[list[str]]:
+    """Group nodes into layers where every node depends only on earlier layers.
+
+    A node's layer is one past the deepest layer of any parent (longest-path
+    layering), computed from the edges themselves rather than from the order of
+    `order` — so it stays correct even if that order is not strictly
+    topological. Nodes sharing a layer have no path between them, which is what
+    makes running them concurrently safe.
+    """
+    in_scope = set(order)
+    children: dict[str, list[str]] = defaultdict(list)
+    indeg: dict[str, int] = {n: 0 for n in order}
+    for e in edges:
+        src, tgt = e.get("source"), e.get("target")
+        if src in in_scope and tgt in in_scope:
+            children[src].append(tgt)
+            indeg[tgt] += 1
+
+    depth: dict[str, int] = {n: 0 for n in order}
+    queue = deque([n for n in order if indeg[n] == 0])
+    seen = 0
+    while queue:
+        n = queue.popleft()
+        seen += 1
+        for c in children[n]:
+            depth[c] = max(depth[c], depth[n] + 1)
+            indeg[c] -= 1
+            if indeg[c] == 0:
+                queue.append(c)
+
+    if seen != len(order):
+        # A cycle would leave nodes unprocessed; fall back to running
+        # everything sequentially rather than risk a wrong schedule.
+        return [[n] for n in order]
+
+    layers: list[list[str]] = []
+    for n in order:                      # order preserved within each layer
+        d = depth[n]
+        while len(layers) <= d:
+            layers.append([])
+        layers[d].append(n)
+    return [l for l in layers if l]
 
 
 def descendants_from(starts, edges: list[dict]) -> set[str]:
@@ -108,6 +167,8 @@ def build_exec_context(
         url = connections.get(conn_name)
         if not url:
             raise ValueError(f"Connection '{conn_name}' not found. Available: {list(connections)}")
+        if url.startswith(_BROKEN):
+            raise ValueError(url[len(_BROKEN):])
         if url.startswith("adls://"):
             raise ValueError(
                 f"'{conn_name}' is an Azure Data Lake storage connection — it has no SQL engine. "
@@ -210,35 +271,70 @@ def build_exec_context(
         large volumes because it avoids row-by-row INSERT statements.
         """
         dialect = dialects.get(connection_name, "")
-        n = len(df)
+        schema, name = _split_table(table)
+        recreate = bool(kwargs.get("recreate"))
 
-        # ── PostgreSQL: COPY via psycopg3 ──────────────────────────────────
+        # ── PostgreSQL: streaming COPY ─────────────────────────────────────
+        # Input is normalised to Arrow and sent to COPY in chunks, so the full
+        # CSV never exists in memory at once. Missing tables are created from
+        # the frame's schema; mode="replace" truncates (keeping the table
+        # definition) unless recreate=True, which drops and recreates it.
         if dialect == "postgresql":
-            import io, csv as _csv
+            import io
+            import pyarrow.csv as pacsv
+            arrow = _to_arrow_table(df)
+            target = _qident(schema, name)
+            collist = ", ".join(_qident(c) for c in arrow.column_names)
+
             eng = get_engine(connection_name)
-            cols = list(df.columns)
-            collist = ", ".join(f'"{c}"' for c in cols)
             raw = eng.raw_connection()
+            n = 0
             try:
                 cur = raw.cursor()
-                if mode == "replace":
-                    cur.execute(f'TRUNCATE TABLE {table}')
-                buf = io.StringIO()
-                # Represent NULLs as an unambiguous sentinel so COPY treats them
-                # as NULL rather than empty strings.
-                w = _csv.writer(buf)
-                df_clean = df.where(pd.notnull(df), None)
-                for row in df_clean.itertuples(index=False, name=None):
-                    w.writerow(["\\N" if v is None else v for v in row])
-                buf.seek(0)
-                with cur.copy(
-                    f"COPY {table} ({collist}) FROM STDIN WITH (FORMAT CSV, NULL '\\N')"
-                ) as cp:
-                    cp.write(buf.read())
+                if recreate:
+                    cur.execute(f"DROP TABLE IF EXISTS {target}")
+                created = False
+                if not _pg_table_exists(cur, schema, name):
+                    if schema:
+                        cur.execute(f"CREATE SCHEMA IF NOT EXISTS {_qident(schema)}")
+                    cols_ddl = ", ".join(
+                        f"{_qident(f.name)} {_pg_type(f.type)}" for f in arrow.schema)
+                    cur.execute(f"CREATE TABLE {target} ({cols_ddl})")
+                    created = True
+                if mode == "replace" and not created:
+                    cur.execute(f"TRUNCATE TABLE {target}")
+
+                opts = pacsv.WriteOptions(include_header=False)
+                chunk = int(kwargs.get("chunk_rows", 200_000))
+                # CSV: unquoted empty = NULL, quoted "" = empty string — the
+                # Arrow CSV writer and PostgreSQL agree on this by default.
+                with cur.copy(f"COPY {target} ({collist}) FROM STDIN WITH (FORMAT CSV)") as cp:
+                    for batch in arrow.to_batches(max_chunksize=chunk):
+                        buf = io.BytesIO()
+                        pacsv.write_csv(batch, buf, write_options=opts)
+                        cp.write(buf.getvalue())
+                        n += batch.num_rows
                 raw.commit()
+            except Exception:
+                raw.rollback()
+                raise
             finally:
                 raw.close()
             return n
+
+        # Remaining paths work on pandas. Normalise Polars / Arrow input, and
+        # create the table if it does not exist yet.
+        df = _to_pandas(df)
+        n = len(df)
+        if dialect not in ("clickhouse", "iceberg") and not kwargs.get("iceberg_catalog"):
+            eng_ = get_engine(connection_name)
+            insp = sa.inspect(eng_)
+            if recreate and insp.has_table(name, schema=schema):
+                with eng_.begin() as c:
+                    c.exec_driver_sql(f"DROP TABLE {table}")
+                insp = sa.inspect(eng_)
+            if not insp.has_table(name, schema=schema):
+                df.head(0).to_sql(name, eng_, schema=schema, if_exists="fail", index=False)
 
         # ── ClickHouse: native block insert via clickhouse driver ──────────
         if dialect == "clickhouse":
@@ -349,7 +445,7 @@ def build_exec_context(
         # ── Fallback: batched multi-row to_sql (works for any dialect) ─────
         eng = get_engine(connection_name)
         if_exists = "replace" if mode == "replace" else "append"
-        df.to_sql(table, eng, if_exists=if_exists, index=False,
+        df.to_sql(name, eng, schema=schema, if_exists=if_exists, index=False,
                   method="multi", chunksize=kwargs.get("chunksize", 1000))
         return n
 
@@ -435,6 +531,84 @@ def render_chart(df: pd.DataFrame, code: str, ctx: dict) -> dict:
     raise ValueError("Chart node: set `result` to a plotly Figure, echarts dict, or use matplotlib.")
 
 
+
+# ── fast_write helpers ────────────────────────────────────────────────────────
+
+def _split_table(table: str) -> tuple[str | None, str]:
+    """'public.sales' → ('public', 'sales');  'sales' → (None, 'sales')."""
+    t = table.strip()
+    if "." in t:
+        schema, name = t.rsplit(".", 1)
+        return schema.strip('"'), name.strip('"')
+    return None, t.strip('"')
+
+
+def _qident(*parts) -> str:
+    return ".".join('"' + p.replace('"', '""') + '"' for p in parts if p)
+
+
+def _frame_kind(df) -> str:
+    mod = type(df).__module__
+    if mod.startswith("polars"):
+        return "polars_lazy" if type(df).__name__ == "LazyFrame" else "polars"
+    if mod.startswith("pyarrow"):
+        return "arrow"
+    return "pandas"
+
+
+def _to_arrow_table(df):
+    """Normalise pandas / Polars (eager or lazy) / Arrow input to a pyarrow
+    Table. Polars LazyFrames are collected with the streaming engine."""
+    kind = _frame_kind(df)
+    if kind == "arrow":
+        return df
+    if kind == "polars_lazy":
+        try:
+            df = df.collect(engine="streaming")
+        except TypeError:
+            df = df.collect()
+        return df.to_arrow()
+    if kind == "polars":
+        return df.to_arrow()
+    return pa.Table.from_pandas(df, preserve_index=False)
+
+
+def _to_pandas(df) -> pd.DataFrame:
+    kind = _frame_kind(df)
+    if kind == "pandas":
+        return df
+    return _to_arrow_table(df).to_pandas()
+
+
+def _pg_type(t) -> str:
+    """Arrow type → PostgreSQL column type for auto-created tables."""
+    import pyarrow.types as at
+    if at.is_dictionary(t):
+        t = t.value_type
+    if at.is_boolean(t):                    return "BOOLEAN"
+    if at.is_int8(t) or at.is_int16(t) or at.is_uint8(t): return "SMALLINT"
+    if at.is_int32(t) or at.is_uint16(t):   return "INTEGER"
+    if at.is_integer(t):                    return "BIGINT"
+    if at.is_float16(t) or at.is_float32(t): return "REAL"
+    if at.is_floating(t):                   return "DOUBLE PRECISION"
+    if at.is_decimal(t):                    return f"NUMERIC({t.precision},{t.scale})"
+    if at.is_date(t):                       return "DATE"
+    if at.is_timestamp(t):
+        return "TIMESTAMPTZ" if t.tz else "TIMESTAMP"
+    if at.is_time(t):                       return "TIME"
+    if at.is_binary(t) or at.is_large_binary(t): return "BYTEA"
+    return "TEXT"
+
+
+def _pg_table_exists(cur, schema: str | None, name: str) -> bool:
+    cur.execute(
+        "SELECT 1 FROM information_schema.tables "
+        "WHERE table_schema = %s AND table_name = %s",
+        (schema or "public", name),
+    )
+    return cur.fetchone() is not None
+
+
 # ── Data profiling ────────────────────────────────────────────────────────────
 
 def profile_dataframe(df: pd.DataFrame, top_n: int = 5, hist_bins: int = 10) -> pd.DataFrame:
@@ -518,22 +692,53 @@ def exec_processor(
     return result
 
 
-def exec_duckdb_processor(sql: str, arrow_in: "pa.Table | None", arrow_extra: list | None = None):
+def exec_duckdb_processor(sql: str, frame_paths: list[str] | None = None,
+                          memory_limit: str | None = None):
     """
-    DuckDB engine: run SQL directly over the upstream Arrow tables — zero-copy,
-    no pandas in the path. First upstream is table `df`; additional upstreams
-    (for joins/unions) are `df2`, `df3`, …  DuckDB spills to disk automatically
-    when a query exceeds RAM.
+    DuckDB engine: run SQL over the upstream frames.
+
+    The upstream frames are attached from their cached Arrow IPC files rather
+    than being loaded into RAM first. DuckDB then decides what to read: it
+    projects only the columns the query touches, pushes filters down, keeps
+    things in memory when they fit, and spills to disk when they don't. That is
+    what lets a DuckDB node work on a frame larger than available memory.
+
+    First upstream is table `df`, additional upstreams are `df2`, `df3`, …
+    With NO upstream, the node is a SOURCE: write any SQL DuckDB understands,
+    e.g. read_csv_auto('/data/*.csv') or read_parquet(...).
 
     Returns a pyarrow Table.
     """
     import duckdb  # lazy — backend still starts if duckdb isn't installed
 
     con = duckdb.connect()  # in-memory database, per-node execution
+    attached = []
     try:
-        con.register("df", arrow_in if arrow_in is not None else pa.table({}))
-        for i, t in enumerate(arrow_extra or [], start=2):
-            con.register(f"df{i}", t)
+        # Memory ceiling + spill location. Without an explicit limit DuckDB
+        # uses ~80% of system RAM; on a shared box you usually want less.
+        limit = memory_limit or os.environ.get("SFS_DUCKDB_MEMORY_LIMIT")
+        if limit:
+            try:
+                con.execute(f"SET memory_limit='{limit}'")
+            except Exception as exc:
+                log_.warning("Could not set duckdb memory_limit=%s: %s", limit, exc)
+        spill = os.environ.get("SFS_DUCKDB_TEMP_DIR")
+        if spill:
+            try:
+                con.execute(f"SET temp_directory='{spill}'")
+            except Exception:
+                pass
+
+        for i, path in enumerate(frame_paths or []):
+            # A trigger (or any upstream that produced nothing) leaves a
+            # zero-column frame. DuckDB refuses to register those, and there is
+            # nothing to query anyway — skip it, so a DuckDB node straight after
+            # a trigger works as a SOURCE (read_csv_auto, read_parquet, …).
+            if _ipc_num_columns(path) == 0:
+                continue
+            name = "df" if i == 0 else f"df{i + 1}"
+            attached.append(name)
+            con.register(name, _duckdb_scan(path))
 
         result = con.execute(sql)
         out = result.arrow()
@@ -544,6 +749,40 @@ def exec_duckdb_processor(sql: str, arrow_in: "pa.Table | None", arrow_extra: li
         return out   # result back as Arrow, straight to cache
     finally:
         con.close()
+
+
+def _ipc_num_columns(path: str) -> int:
+    """Column count of a cached Arrow IPC file, reading only its footer.
+    Returns -1 if it can't be determined (callers then proceed as normal)."""
+    try:
+        with pa.ipc.open_file(path) as r:
+            return len(r.schema.names)
+    except Exception:
+        return -1
+
+
+def _duckdb_scan(path: str):
+    """Attach a cached Arrow IPC file to DuckDB without loading it into RAM.
+
+    Preference order:
+      1. pyarrow Dataset  — lazy scan with column projection and filter
+         pushdown; DuckDB reads only what the query needs.
+      2. memory-mapped IPC — the OS pages data in on demand and can evict it,
+         so the frame is not copied onto the heap.
+      3. plain read       — last resort, loads the table (previous behaviour).
+    """
+    try:
+        import pyarrow.dataset as ds
+        return ds.dataset(path, format="ipc")
+    except Exception:
+        pass
+    try:
+        with pa.memory_map(path, "rb") as source:
+            return pa.ipc.open_file(source).read_all()
+    except Exception:
+        pass
+    with pa.ipc.open_file(path) as r:
+        return r.read_all()
 
 
 SQLGLOT_DIALECTS = {
@@ -628,7 +867,8 @@ def exec_ibis_processor(code: str, target_url: str, df_in: pd.DataFrame | None, 
     return result.to_pandas()      # executes in the warehouse
 
 
-def exec_polars_processor(code: str, paths: list[str], ctx: dict, imports_code: str):
+def exec_polars_processor(code: str, paths: list[str], ctx: dict, imports_code: str,
+                          output_path: str | None = None):
     """
     Polars engine: `df` is a LazyFrame scanned from the upstream Arrow IPC file —
     no data loads until the plan collects. Leave the result in `df` (LazyFrame or
@@ -649,6 +889,14 @@ def exec_polars_processor(code: str, paths: list[str], ctx: dict, imports_code: 
 
     result = local.get("df")
     if isinstance(result, pl.LazyFrame):
+        # Preferred: stream the result straight to the cache file so the output
+        # never has to fit in memory. Falls back to a streaming collect.
+        if output_path:
+            try:
+                result.sink_ipc(output_path)
+                return _SUNK
+            except Exception as exc:
+                log_.info("polars sink_ipc unavailable (%s) — collecting instead", exc)
         try:
             result = result.collect(engine="streaming")   # polars >= 1.x
         except TypeError:
@@ -656,6 +904,17 @@ def exec_polars_processor(code: str, paths: list[str], ctx: dict, imports_code: 
     if not isinstance(result, pl.DataFrame):
         raise ValueError("Polars processor must leave a pl.DataFrame or pl.LazyFrame in `df`.")
     return result.to_arrow()
+
+
+_BROKEN = "sfs-broken://"   # mirrors connection_service.BROKEN_URL_PREFIX
+
+
+class _Sunk:
+    """Sentinel: the engine already wrote its output to the cache file."""
+    __slots__ = ()
+
+
+_SUNK = _Sunk()
 
 
 # ── Built-in engine registrations ─────────────────────────────────────────────
@@ -670,15 +929,23 @@ def _run_pandas(ec: "EngineContext"):
 
 def _run_duckdb(ec: "EngineContext"):
     if not ec.code.strip():
-        return ec.arrow_in if ec.arrow_in is not None else pa.table({})
-    return exec_duckdb_processor(ec.code, ec.arrow_in, ec.arrow_extra)
+        # Pass-through when there is a real upstream frame; nothing otherwise.
+        if ec.frame_paths and _ipc_num_columns(ec.frame_paths[0]) != 0:
+            with pa.ipc.open_file(ec.frame_paths[0]) as r:
+                return r.read_all()
+        return pa.table({})
+    return exec_duckdb_processor(
+        ec.code, ec.frame_paths,
+        memory_limit=(ec.params or {}).get("memory_limit"),
+    )
 
 
 def _run_polars(ec: "EngineContext"):
     if not ec.code.strip():
         return (pa.ipc.open_file(ec.frame_paths[0]).read_all()
                 if ec.frame_paths else pa.table({}))
-    return exec_polars_processor(ec.code, ec.frame_paths, ec.exec_globals, ec.preamble)
+    return exec_polars_processor(ec.code, ec.frame_paths, ec.exec_globals,
+                                 ec.preamble, output_path=ec.output_path)
 
 
 def _run_sql(ec: "EngineContext"):
@@ -705,9 +972,14 @@ def _register_builtin_engines() -> None:
         language="python", tier="free", requires=("polars",),
     ))
     register_engine(EngineSpec(
-        name="duckdb", label="DuckDB", description="SQL · zero-copy Arrow",
-        run=_run_duckdb, input_mode="arrow", output_mode="arrow",
+        name="duckdb", label="DuckDB", description="SQL · streams from disk · spills",
+        run=_run_duckdb, input_mode="paths", output_mode="arrow",
         language="sql", tier="free", requires=("duckdb",),
+        params=(
+            {"key": "memory_limit", "label": "Memory limit", "type": "string",
+             "help": "e.g. 4GB. Blank uses DuckDB's default (~80% of RAM). "
+                     "Above this DuckDB spills to disk instead of failing."},
+        ),
     ))
     register_engine(EngineSpec(
         name="sql", label="SQL ⚡", description="Pushdown · SQLGlot · warehouse",
@@ -808,7 +1080,12 @@ async def execute_flow(
             await ws_manager.broadcast(flow_id, {"type": "flow_complete", "duration_ms": 0, "stopped": False})
             return []
 
-    for node_id in order:
+    # The per-node work, extracted so it can be driven either sequentially
+    # or — when SFS_PARALLEL_BRANCHES is enabled — concurrently across nodes
+    # that sit in the same dependency layer and therefore cannot affect each
+    # other. State it mutates (results, blocked, frames) is shared by closure.
+    async def _execute_one(node_id):
+        nonlocal any_hard_stop
         # Skip nodes that are downstream of a hard stop (blocked branch)
         if node_id in blocked:
             await ws_manager.broadcast(flow_id, {
@@ -816,7 +1093,7 @@ async def execute_flow(
                 "node_id": node_id,
                 "label": node_map[node_id].get("data", {}).get("label", node_id),
             })
-            continue
+            return
 
         node      = node_map[node_id]
         node_type = node["type"]
@@ -827,12 +1104,12 @@ async def execute_flow(
         # AI notes (ai_start/ai_step/ai_end) are design-time specs; they only
         # run after "Build with AI" converts them into processors.
         if node_type in ("annotation", "ai_start", "ai_step", "ai_end"):
-            continue
+            return
 
         # "Run from here" scoping: only execute the start node and its descendants.
         # Nodes outside the scope are skipped — their cached frames feed the scope.
         if run_scope is not None and node_id not in run_scope:
-            continue
+            return
 
         await ws_manager.broadcast(flow_id, {
             "type": "node_start",
@@ -916,7 +1193,7 @@ async def execute_flow(
                     "node_id": node_id, "node_type": node_type,
                     "status": "ok", "rows_in": 0, "rows_out": 0, "duration_ms": duration_ms,
                 })
-                continue
+                return
 
             # ── Processor ─────────────────────────────────────────────────────
             elif node_type == "processor":
@@ -927,6 +1204,8 @@ async def execute_flow(
                 if spec.needs_target_connection:
                     target = data.get("target_connection") or ""
                     target_url = connection_urls.get(target)
+                    if target_url and target_url.startswith(_BROKEN):
+                        raise ValueError(target_url[len(_BROKEN):])
                     if not target_url:
                         raise ValueError(
                             f"Engine '{spec.label}' needs a target connection — pick one in "
@@ -946,16 +1225,27 @@ async def execute_flow(
 
                 ec = EngineContext(
                     code=code, node_data=data, params=engine_params,
+                    output_path=frame_dest_path(project_id, node_id),
                     exec_globals=ctx, preamble=preamble_code,
                     df_in=df_in, df_extra=df_extra,
                     arrow_in=arrow_in, arrow_extra=arrow_extra,
                     frame_paths=polars_paths,
                     target_url=target_url, target_dialect=target_dialect,
                 )
-                result = spec.run(ec)
+                # Engines are blocking CPU work. Running them in a worker
+                # thread keeps the event loop (and the live node updates)
+                # responsive, and lets independent nodes genuinely overlap —
+                # pandas, DuckDB, Polars and Arrow all release the GIL for the
+                # heavy parts.
+                result = await asyncio.to_thread(spec.run, ec)
 
+                # The engine may have streamed its result straight to the cache
+                # file (e.g. polars sink_ipc) — nothing left to write.
+                if isinstance(result, _Sunk):
+                    out_table = load_frame_arrow(project_id, node_id)
+                    rows_out = out_table.num_rows
                 # Store according to the engine's declared output type
-                if spec.output_mode == "arrow":
+                elif spec.output_mode == "arrow":
                     out_table = result
                     rows_out = out_table.num_rows
                     store_frame_arrow(project_id, node_id, out_table)
@@ -998,7 +1288,7 @@ async def execute_flow(
                     "status": "ok", "rows_in": rows_in, "rows_out": rows_out,
                     "duration_ms": duration_ms,
                 })
-                continue
+                return
 
             # ── Stop / Tap ────────────────────────────────────────────────────
             # ── Router (conditional branching) ────────────────────────────────
@@ -1041,7 +1331,7 @@ async def execute_flow(
                     (taken if handle == chosen else not_taken).append(e.get("target"))
                 if not_taken:
                     keep = descendants_from(taken, edges)
-                    blocked |= (descendants_from(not_taken, edges) - keep)
+                    blocked.update(descendants_from(not_taken, edges) - keep)
 
                 duration_ms = round((time.perf_counter() - t0) * 1000)
                 await ws_manager.broadcast(flow_id, {
@@ -1056,7 +1346,7 @@ async def execute_flow(
                     "duration_ms": duration_ms, "chosen_branch": chosen,
                     "detail": "; ".join(errors) if errors else None,
                 })
-                continue
+                return
 
             elif node_type == "stop":
                 mode     = data.get("mode", "hard")
@@ -1100,10 +1390,10 @@ async def execute_flow(
                 if mode == "hard":
                     # Block only this stop's downstream descendants — sibling
                     # branches continue to run normally.
-                    blocked |= descendants_of(node_id, edges)
+                    blocked.update(descendants_of(node_id, edges))
                     any_hard_stop = True
                 # For tap mode: frame is stored, flow continues to next node
-                continue
+                return
 
             # ── Profile output ────────────────────────────────────────────────
             elif node_type == "profile_out":
@@ -1138,7 +1428,7 @@ async def execute_flow(
                     "status": "ok", "rows_in": rows_in, "rows_out": rows_out,
                     "duration_ms": duration_ms,
                 })
-                continue
+                return
 
             # ── Table output ──────────────────────────────────────────────────
             elif node_type == "table_out":
@@ -1164,7 +1454,7 @@ async def execute_flow(
                     "status": "ok", "rows_in": rows_in, "rows_out": rows_out,
                     "duration_ms": duration_ms,
                 })
-                continue
+                return
 
             # ── Chart output ──────────────────────────────────────────────────
             elif node_type == "chart_out":
@@ -1184,7 +1474,7 @@ async def execute_flow(
                     "status": "ok", "rows_in": rows_in, "rows_out": rows_out,
                     "duration_ms": duration_ms,
                 })
-                continue
+                return
 
             # ── Explore / Report (publish to Streamlit viewer) ────────────────
             elif node_type in ("explore_out", "report_out"):
@@ -1215,13 +1505,13 @@ async def execute_flow(
                     "status": "ok", "rows_in": rows_in, "rows_out": rows_out,
                     "duration_ms": duration_ms,
                 })
-                continue
+                return
 
             else:
                 # Unknown node type — pass frame through
                 df_out = df_in if df_in is not None else pd.DataFrame()
                 store_frame(project_id, node_id, df_out)
-                continue
+                return
 
         except Exception:
             tb = traceback.format_exc()
@@ -1237,8 +1527,25 @@ async def execute_flow(
             })
             # On error, block only this node's descendants (no frame to pass them).
             # Sibling branches continue — matches the hard-stop behaviour.
-            blocked |= descendants_of(node_id, edges)
-            continue
+            blocked.update(descendants_of(node_id, edges))
+            return
+
+
+    # ── Drive the graph ───────────────────────────────────────────────────
+    # Sequential by default. With SFS_PARALLEL_BRANCHES=1 the nodes are run
+    # layer by layer: every node in a layer has all its dependencies already
+    # satisfied and shares no edge with its peers, so running them together
+    # is safe. Blocking decisions (stop / router) only ever affect later
+    # layers, which are scheduled after the current one finishes.
+    if _parallel_enabled():
+        for layer in _dependency_layers(order, edges):
+            if len(layer) == 1:
+                await _execute_one(layer[0])
+            else:
+                await asyncio.gather(*(_execute_one(n) for n in layer))
+    else:
+        for node_id in order:
+            await _execute_one(node_id)
 
     total_ms = round((time.perf_counter() - flow_start) * 1000)
     await ws_manager.broadcast(flow_id, {

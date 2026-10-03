@@ -135,17 +135,23 @@ effectively trusted with the backend host. **Treat flow-edit access as equivalen
 to shell access.** Run SFS for trusted developers, on isolated infrastructure,
 with narrowly scoped database credentials — not as an open shared service.
 
-**Node boundaries materialise the full frame.** Polars collects with its
-streaming engine and DuckDB spills to disk, so an individual node can handle data
-larger than RAM. But every node's output is written to the Arrow cache in full —
-that is exactly what makes inspect-and-rerun possible. Streaming end-to-end and
-inspectability are in tension; SFS deliberately chose inspectability. For very
-large tables, use the SQL/Ibis pushdown engines to transform in the warehouse and
-bring back only the results.
+**Data larger than RAM: engine-dependent.** DuckDB scans the cached Arrow file
+from disk — projecting only the columns a query touches and spilling to disk
+when a join or sort exceeds its memory limit — and Polars scans lazily and can
+stream its result straight back out. Both handle frames larger than memory.
+**pandas does not**: it loads the whole frame. Use Polars or DuckDB for large
+data, and the SQL/Ibis pushdown engines when the data should never leave the
+warehouse at all.
 
-**Execution is sequential.** The executor walks the graph in dependency order,
-one node at a time. Independent branches do not currently run in parallel, and
-there is no distributed execution — worker-queue scaling is on the roadmap.
+Note that node *boundaries* still materialise a full frame in the Arrow cache —
+that is what makes inspect-and-rerun work. Streaming end-to-end and
+inspectability are in tension; SFS chose inspectability, with out-of-core
+processing inside each node.
+
+**Execution is sequential by default**, with opt-in parallelism. Set
+`SFS_PARALLEL_BRANCHES=1` to run independent branches concurrently on multiple
+cores — useful whenever a flow fans out. There is no distributed execution
+across machines; worker-queue scaling is on the roadmap.
 
 **Scheduled retries re-run the whole flow.** A retry re-executes from the start,
 not from the failed node. Make writes idempotent before enabling retries:

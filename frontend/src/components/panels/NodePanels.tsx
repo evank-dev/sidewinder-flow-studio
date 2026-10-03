@@ -210,6 +210,7 @@ const PROCESSOR_HINT = `# Incoming DataFrame is available as \`df\`
 #   read_tables(conn, [tables], schema=…)— load many tables → one DataFrame
 #   fast_write(df, conn, table, mode='append'|'replace') — NATIVE bulk load
 #     (Postgres/ClickHouse/SQLServer/MySQL/Oracle/Iceberg) — far faster than to_sql
+#     creates the table if missing; recreate=True rebuilds it
 #   vars       — global variables dict
 #
 # Examples:

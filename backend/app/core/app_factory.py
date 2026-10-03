@@ -45,7 +45,7 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Sidewinder Flow Studio API",
-        version="1.12",
+        version="1.17",
         description="Visual Python notebook DAG with scheduling",
         lifespan=lifespan,
     )

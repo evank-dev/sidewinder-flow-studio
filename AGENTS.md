@@ -121,9 +121,14 @@ connection can query Iceberg but cannot bulk-load it). Any other dialect falls
 back to a batched `to_sql(method="multi", chunksize=1000)` automatically —
 still better than the row-by-row default.
 
-Only use `df.to_sql(...)` directly if you deliberately need a behaviour
-`fast_write` doesn't cover (e.g. letting pandas CREATE a brand-new table from a
-tiny result), and even then pass `method="multi"`. For anything more than a few
+`fast_write` accepts pandas, Polars (eager or LazyFrame) and Arrow tables,
+creates the target table (and schema) if missing, and for PostgreSQL streams COPY
+in chunks. `mode="replace"` truncates an existing table; add `recreate=True` to
+drop and rebuild it when columns changed. It is a Python function: never emit it
+inside a `duckdb` or `sql` engine node — those execute SQL.
+
+Only use `df.to_sql(...)` directly for behaviour `fast_write` doesn't cover, and
+even then pass `method="multi"`. For anything more than a few
 thousand rows, `fast_write` is the rule, not the exception.
 
 For upserts/merges, load into a temp/staging table with `fast_write` then run
@@ -132,12 +137,14 @@ express upserts through pandas.
 
 ## Execution model — what agents must not assume
 
-- **Sequential.** The executor walks the graph in dependency order, one node at a
-  time. Independent branches do NOT run in parallel.
-- **Every node boundary materialises a full frame** to the Arrow cache. Polars
-  streams and DuckDB spills *within* a node, but nothing streams across nodes.
-  For very large tables use the `sql`/`ibis` pushdown engines rather than pulling
-  rows through local frames.
+- **Sequential by default**, parallel per layer when SFS_PARALLEL_BRANCHES=1.
+  Never assume two nodes run in a particular order beyond dependency order.
+- **Every node boundary materialises a full frame** to the Arrow cache. Within a
+  node, DuckDB scans the cached file (column projection, spills to disk) and
+  Polars scans lazily, so both handle larger-than-RAM data; **pandas loads the
+  whole frame**. Generate Polars/DuckDB for large data, `sql`/`ibis` when it
+  should stay in the warehouse.
+- **duckdb with no upstream is a source** — read_csv_auto / read_parquet etc.
 - **Scheduled retries re-run the whole flow**, not just the failed node. Generated
   write code should be idempotent — prefer `fast_write(..., mode="replace")`; an
   `append` that reruns will duplicate rows.

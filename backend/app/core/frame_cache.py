@@ -65,6 +65,15 @@ def has_frame(flow_id: str, node_id: str) -> bool:
     return _cache_path(flow_id, node_id).exists()
 
 
+def frame_dest_path(flow_id: str, node_id: str) -> str:
+    """Path a node's output SHOULD be written to (parent dirs created).
+    Unlike frame_path() this does not require the file to exist — it is for
+    engines that stream their result straight to disk."""
+    path = _cache_path(flow_id, node_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return str(path)
+
+
 def frame_path(flow_id: str, node_id: str) -> str:
     """Filesystem path of a cached Arrow IPC frame — used by the Polars engine
     to pl.scan_ipc() lazily, so large frames never fully load until collect()."""

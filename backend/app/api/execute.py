@@ -12,25 +12,28 @@ from app.services.connection_service import list_connections, build_url, get_con
 router = APIRouter()
 
 
+# All per-connection maps come from connection_maps(), which isolates failures:
+# a connection with unusable credentials no longer breaks flows that don't use it.
+
+async def _maps(db: AsyncSession) -> dict:
+    from app.services.connection_service import connection_maps
+    return connection_maps(await list_connections(db))
+
+
 async def _build_connection_urls(db: AsyncSession) -> dict[str, str]:
-    conns = await list_connections(db)
-    return {c.name: build_url(c) for c in conns}
+    return (await _maps(db))["urls"]
 
 
 async def _build_connection_cargs(db: AsyncSession) -> dict[str, dict]:
-    conns = await list_connections(db)
-    return {c.name: get_connect_args(c) for c in conns}
+    return (await _maps(db))["cargs"]
 
 
 async def _build_connection_dialects(db: AsyncSession) -> dict[str, str]:
-    conns = await list_connections(db)
-    return {c.name: c.dialect for c in conns}
+    return (await _maps(db))["dialects"]
 
 
 async def _build_storage_options(db: AsyncSession) -> dict[str, dict]:
-    from app.services.connection_service import get_storage_options
-    conns = await list_connections(db)
-    return {c.name: get_storage_options(c) for c in conns if c.dialect == "adls"}
+    return (await _maps(db))["storage"]
 
 
 class RunRequest(BaseModel):
@@ -49,10 +52,16 @@ async def run_flow(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
-    connection_urls = await _build_connection_urls(db)
-    storage_options = await _build_storage_options(db)
-    connection_dialects = await _build_connection_dialects(db)
-    connection_cargs = await _build_connection_cargs(db)
+    # Anything that fails before the background task starts must come back as
+    # a readable message — otherwise the UI just sees an opaque 500.
+    try:
+        connection_urls = await _build_connection_urls(db)
+        storage_options = await _build_storage_options(db)
+        connection_dialects = await _build_connection_dialects(db)
+        connection_cargs = await _build_connection_cargs(db)
+    except Exception as exc:
+        raise HTTPException(status_code=500,
+                            detail=f"Could not prepare the run: {type(exc).__name__}: {exc}")
 
     async def _run():
         # Record every run in the audit history (manual trigger, single attempt)

@@ -43,8 +43,14 @@ These are the complete, genuinely useful free product. Nothing here is crippled.
 ### Execution engines (per-processor choice)
 - ✅ **pandas** — full Python
 - ✅ **Polars** — lazy, streaming, Arrow-native
-- ✅ **DuckDB** — SQL over the upstream Arrow frame, zero-copy
+- ✅ **DuckDB** — SQL over the cached Arrow file: column projection, spills to
+  disk above its memory limit, and usable as a source node (read_csv/read_parquet)
 - ✅ Arrow IPC contract between all nodes (mixed engines interoperate)
+- ✅ **Out-of-core processing on one machine** — Polars lazy scan + streaming
+  sink, DuckDB disk scan + spilling. Larger-than-RAM data is a free capability,
+  not a paid one (pandas remains in-memory by nature)
+- ✅ **Parallel branch execution** — independent branches run concurrently on
+  multiple cores (`SFS_PARALLEL_BRANCHES=1`)
 
 ### Data movement
 - ✅ Multi-input joins/unions (`df`, `df2`, `df3`, `dfs`)
@@ -135,14 +141,13 @@ These are the complete, genuinely useful free product. Nothing here is crippled.
 | **Auth — SSO/OIDC** (Azure AD etc.) | ⬜ | 🧩 Plugin | The #1 enterprise procurement ask. |
 | **RBAC** (viewer/editor/admin; viewers see reports only) | ⬜ | 🧩 Plugin | Pairs with reports. |
 | **Isolated plugin runtime** — separate venv per plugin, Arrow file handoff | ✅ | 🧩 Open core | DONE — `app/engine/runtime.py`, exposed to plugins as `api.run_isolated()`. The *mechanism* is open; curated, version-tested plugin bundles remain the intended paid layer. |
-| **Worker queue scaling** — Celery/RQ workers, Postgres metadata, shared frame store | ⬜ | 🧩 Plugin + infra | Removes the single-process concurrency ceiling. |
+| **Worker queue scaling** — Celery/RQ workers, Postgres metadata, shared frame store | ⬜ | 🧩 Plugin + infra | Distributed execution across machines and concurrent users — distinct from the free single-machine parallelism. |
 | **Vector/MCP semantic catalog** — profile tables + DAG lineage → catalog → expose as MCP server for AI tools | ⬜ | 🧩 Plugin | Flagship AI-native differentiator. |
 | **Pushdown-aware profiling** — compute stats in-database, return only the stats | ⬜ | 🧩 Plugin | Pairs with catalog + pushdown engines. |
 | **Ibis `create_table` in-DB materialization** — write back same DB with zero round-trip | ⬜ | 🔗→🧩 | Small addition to the Ibis engine. |
 | **Power BI semantic model read** (XMLA/TMDL/DAX) | ⬜ | 🧩 Plugin | Read feasible; writing cautioned (governance). |
 | **StarRocks Stream Load / MySQL LOAD DATA** — best-tier bulk paths | ⬜ | 🔗 in `fast_write` | Optimizes existing dispatcher. |
 | **`fast_read`** (ConnectorX Arrow-native fast source reads) | ⬜ | 🔗 in helpers | Symmetric to fast_write. |
-| **Parallel branch execution** — run independent branches concurrently | ⬜ | Core (open) | Executor is currently strictly sequential. |
 | **Resume from failed node** — scheduled retries re-run only what failed | ⬜ | Core (open) | Today a retry re-runs the whole flow; writes must be idempotent. |
 | **Automated tests + CI** | ⬜ | Core (open) | No test suite yet — the most visible gap for contributors. |
 | **Desktop app** (Electron/Tauri) — education/free tier | ⬜ | Packaging | Independent track. |
@@ -154,6 +159,10 @@ These are the complete, genuinely useful free product. Nothing here is crippled.
 **Free (open core):** a complete tool for an individual or small team —
 all engines that run locally (pandas/Polars/DuckDB), **all** connectors,
 fast_write, reports, profiling, AI authoring, basic cron, self-hosting.
+
+Out-of-core processing and single-machine parallelism are deliberately **free**:
+the individual with a laptop and a file bigger than their RAM is exactly who
+needs them. What organizations pay for is scale *across* machines and users.
 
 **Enterprise (paid):** operational maturity and scale for organizations —
 warehouse pushdown engines (SQL/Ibis), scheduler robustness (retries/alerts/

@@ -64,7 +64,15 @@ df = (df
 
 ### 3. DuckDB (free)
 
-Write SQL directly over the upstream frame, which is available as a table named `df`. Zero-copy over Arrow, spills to disk automatically. The query result becomes the node output.
+Write SQL over the upstream frame, available as a table named `df` (additional inputs are `df2`, `df3`). DuckDB reads the cached Arrow file from disk rather than loading it into memory first, so it projects only the columns your query touches and spills to disk rather than failing on large joins.
+
+**With no upstream node it is a source**: write any SQL DuckDB understands, including direct file reads — often faster than the pandas equivalent because filters push down into the reader.
+
+```sql
+SELECT * FROM read_csv_auto('/data/imports/sales_*.csv')
+SELECT region, sum(amount) FROM read_parquet('/data/lake/**/*.parquet')
+WHERE year = 2026 GROUP BY region
+```
 
 ```sql
 SELECT date_trunc('month', reference_date::DATE) AS month,
@@ -111,6 +119,27 @@ frame handed over as an Arrow file. The SFS process never imports the library, s
 packages with aggressive version pins can be used without destabilising the ETL
 environment. `plugins/sfs-plugin-sklearn` ships both an in-process and an
 isolated variant of the same engine as a reference.
+
+### Memory behaviour
+
+| Engine | Data larger than RAM? |
+|---|---|
+| pandas | **No** — loads the whole frame into memory |
+| Polars | Yes — lazy scan of the cached file, streaming collect, can sink its result straight to disk |
+| DuckDB | Yes — scans the cached file, reads only the columns the query needs, spills to disk above its memory limit |
+| SQL / Ibis | N/A — the work happens in the warehouse; only results come back |
+
+Set a DuckDB node's **Memory limit** (e.g. `4GB`) in the node panel, or
+`SFS_DUCKDB_MEMORY_LIMIT` globally; `SFS_DUCKDB_TEMP_DIR` controls where it
+spills. Below the limit DuckDB stays in memory, so small frames are unaffected.
+
+### Parallel execution
+
+By default nodes run one at a time in dependency order. Set
+`SFS_PARALLEL_BRANCHES=1` to run independent branches concurrently — nodes are
+grouped into layers where nothing in a layer depends on anything else in it, and
+each layer runs together across cores. A flow that fans into three branches
+processes all three at once.
 
 **Which engine when?**
 
@@ -196,6 +225,17 @@ To load a DataFrame into a database, use the injected `fast_write` helper rather
 ```python
 fast_write(df, "postgres_local", "public.forex", mode="replace")   # append | replace
 ```
+
+It accepts a pandas DataFrame, a Polars DataFrame **or LazyFrame**, or an Arrow
+table — so it works in pandas and Polars nodes alike. **Missing tables are created
+automatically** from the frame's schema (including the schema, e.g. `public`).
+`mode="replace"` empties an existing table but keeps its definition; pass
+`recreate=True` to drop and rebuild it when the columns have changed. For
+PostgreSQL the data streams to `COPY` in chunks, so large frames don't need the
+whole CSV in memory.
+
+> `fast_write` is Python — use it in a **pandas or Polars** node. A DuckDB node
+> runs SQL, so it can't call it; add a pandas or Polars node after the DuckDB one.
 
 It automatically uses each database's native bulk loader — PostgreSQL `COPY`, ClickHouse native insert, SQL Server `fast_executemany`, MySQL/StarRocks/Doris batched insert, Oracle array binding, and Iceberg via pyiceberg — falling back to a batched insert for anything else. This is typically 10–100× faster than `to_sql`. For upserts, `fast_write` into a staging table then run your merge SQL via a SQL node.
 

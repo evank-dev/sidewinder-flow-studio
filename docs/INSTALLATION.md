@@ -68,6 +68,14 @@ ANTHROPIC_API_KEY=
 # Optional: where isolated plugin virtual environments live
 SFS_PLUGIN_VENVS_DIR=./plugin_venvs
 
+# Optional: run independent branches concurrently (off by default)
+SFS_PARALLEL_BRANCHES=0
+
+# Optional: DuckDB memory ceiling and spill location.
+# Below the limit DuckDB works in memory; above it, it spills instead of failing.
+SFS_DUCKDB_MEMORY_LIMIT=
+SFS_DUCKDB_TEMP_DIR=
+
 # Optional: enterprise scheduler failure alerts
 SLACK_WEBHOOK_URL=
 SMTP_HOST=
@@ -286,7 +294,7 @@ For the reports viewer, add an **Explore** node after a processor, run, then ope
 
 | Symptom | Fix |
 |---|---|
-| Saved connection passwords stop working | `SECRET_KEY` changed — restore the original key |
+| Saved connection passwords stop working / `InvalidToken` in the logs | `SECRET_KEY` changed since they were saved. Restore the original key in `.env`, or edit each connection and re-enter its password. Other connections and flows keep working; only nodes using the affected connection fail. |
 | Report viewer: "PyGWalker not installed" | Restart the **viewer** terminal (packages installed after start aren't seen); ensure `streamlit==1.41.1` + `pygwalker==0.5.0.1` |
 | `IO Error ... file is being used by another process` (Windows) | Move data dirs out of OneDrive/Dropbox; the viewer now uses short-lived connections but synced folders still interfere |
 | Engine errors "sqlglot/ibis not installed" | `pip install -e ".[enterprise]"` |

@@ -4,14 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "flow-studio-backend"
-version = "1.12"
+version = "1.17"
 description = "Sidewinder Flow Studio (SFS) — visual Python notebook DAG with scheduling"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
     "websockets>=13.0",
-    "sqlalchemy>=2.0.0",
+    "sqlalchemy[asyncio]>=2.0.0",   # [asyncio] pulls greenlet, required by create_async_engine
+    "greenlet>=3.0.0",              # named explicitly: slim images don't always resolve the extra
     "pandas>=2.2.0",
     "pyarrow>=18.0.0",
     "duckdb>=1.1.0",

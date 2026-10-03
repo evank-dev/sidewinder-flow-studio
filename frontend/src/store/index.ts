@@ -50,6 +50,8 @@ interface AppState {
   variables: Variable[]
   execState: Record<string, NodeExecState>
   running: boolean
+  runError: string | null
+  clearRunError: () => void
   selectedNodeId: string | null
   sidebarTab: SidebarTab
   sidebarVisible: boolean
@@ -106,6 +108,8 @@ export const useStore = create<AppState>((set, get) => ({
   variables: [],
   execState: {},
   running: false,
+  runError: null,
+  clearRunError: () => set({ runError: null }),
   selectedNodeId: null,
   sidebarTab: 'properties',
   sidebarVisible: true,
@@ -420,12 +424,22 @@ export const useStore = create<AppState>((set, get) => ({
       liveFlow = { ...liveFlow, nodes: currentNodes, edges: currentEdges }
     }
 
-    set({ running: true, execState: {}, sidebarTab: 'output', sidebarVisible: true })
+    set({ running: true, runError: null, execState: {}, sidebarTab: 'output', sidebarVisible: true })
     try {
       await api.execute.run(activeProject.id, activeFlowId, liveFlow, startFromNode, resumeFromNode)
-    } catch (e) {
+    } catch (e: any) {
+      // Previously only logged to the console, so a failed start looked like
+      // "nothing happened". Surface the backend's reason instead.
       console.error('Run flow error:', e)
-      set({ running: false })
+      let msg = String(e?.message ?? e)
+      const m = msg.match(/^API (\d+): (.*)$/s)
+      if (m) {
+        try { msg = JSON.parse(m[2]).detail ?? m[2] } catch { msg = m[2] }
+        msg = `Run failed to start (HTTP ${m[1]}): ${msg}`
+      } else if (/Failed to fetch|NetworkError/i.test(msg)) {
+        msg = 'Run failed to start: the backend is unreachable. Is the backend container running?'
+      }
+      set({ running: false, runError: msg })
     }
   },
 
