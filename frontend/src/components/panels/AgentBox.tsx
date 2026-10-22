@@ -37,14 +37,14 @@ export function AgentBox({ nodeId, nodeType, engine = 'pandas', onInsert }: Agen
   const [providerName, setProviderName] = useState<string | null>(null)
 
   const placeholder = nodeType === 'chart'
-    ? 'e.g. "bar chart of total_loans_count by month for project gh_mtn_mfs"'
+    ? 'e.g. "bar chart of average salary by hire year for the Development department"'
     : nodeType === 'report'
-      ? 'e.g. "KPI row with total loans and payments, monthly bar chart, detail table"'
+      ? 'e.g. "KPI row with headcount and average salary, salary-by-department bar chart, detail table"'
       : engine === 'duckdb'
-        ? 'e.g. "monthly loan totals per project, sorted by month" — generates DuckDB SQL'
+        ? 'e.g. "average current salary per department, highest first" — generates DuckDB SQL'
         : engine === 'polars'
-          ? 'e.g. "filter to active rows, sum revenue by market" — generates lazy Polars'
-          : 'e.g. "keep only active rows, then sum revenue by market"'
+          ? 'e.g. "salaries since 1990, average amount by year" — generates lazy Polars'
+          : 'e.g. "join employees to salaries, then average salary by gender"'
 
   const generate = async () => {
     if (!request.trim() || !activeProject) return

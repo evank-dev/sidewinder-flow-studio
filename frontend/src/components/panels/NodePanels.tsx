@@ -214,23 +214,23 @@ const PROCESSOR_HINT = `# Incoming DataFrame is available as \`df\`
 #   vars       — global variables dict
 #
 # Examples:
-# engine = get_engine("Prod Postgres")
-# df = pd.read_sql("SELECT * FROM pbi.kpis LIMIT 1000", engine)
+# engine = get_engine("postgres_local")
+# df = pd.read_sql("SELECT * FROM employees.employee LIMIT 1000", engine)
 #
-# df['margin'] = df['revenue'] - df['cost']
-# df = df[df['status'] == 'active']
-# df = df.groupby('market').agg({'revenue': 'sum'}).reset_index()
+# df['tenure_years'] = (pd.Timestamp.today() - pd.to_datetime(df['hire_date'])).dt.days // 365
+# df = df[df['gender'] == 'F']
+# df = df.groupby('dept_name').agg({'amount': 'mean'}).reset_index()
 `
 
 const POLARS_HINT = `# Polars engine: \`df\` is a LazyFrame scanned from the upstream frame.
 # Multiple inputs: df2, df3, … (\`dfs\` = list). \`pl\` is pre-injected.
 # Stay lazy — no .collect(); SFS collects (streaming) at the end.
 #
-# df = df.filter(pl.col("projectid") == "gh_mtn_mfs")
-# df = df.with_columns(pl.col("reference_date").str.to_date().alias("d"))
-# df = df.group_by(pl.col("d").dt.truncate("1mo")).agg(pl.col("total_loans_count").sum())
+# df = df.filter(pl.col("from_date") >= pl.date(1990, 1, 1))
+# df = df.with_columns(pl.col("from_date").dt.year().alias("year"))
+# df = df.group_by("year").agg(pl.col("amount").mean().alias("avg_salary"))
 #
-# Join:  df = df.join(df2, on="key", how="left")
+# Join:  df = df.join(df2, left_on="employee_id", right_on="id", how="left")
 # Union: df = pl.concat(dfs)
 `
 
@@ -238,22 +238,24 @@ const SQL_HINT = `-- SQL pushdown: runs IN the target warehouse (pick a connecti
 -- SFS transpiles dialects with SQLGlot. SELECT/WITH results become the node output;
 -- CREATE/COPY/LOAD/MERGE execute without fetching (warehouse-to-warehouse orchestration).
 --
--- SELECT projectid, SUM(total_loans_count) AS loans
--- FROM analytics.mfs_ods_vasp_daily
--- WHERE reference_date >= DATE '2026-01-01'
--- GROUP BY projectid
+-- SELECT d.dept_name, AVG(s.amount) AS avg_salary
+-- FROM employees.salary s
+-- JOIN employees.department_employee de ON de.employee_id = s.employee_id
+-- JOIN employees.department d ON d.id = de.department_id
+-- WHERE s.to_date = DATE '9999-01-01' AND de.to_date = DATE '9999-01-01'
+-- GROUP BY d.dept_name
 --
 -- Bulk transfer example (Snowflake → GCS):
--- COPY INTO @gcs_stage/loans FROM (SELECT * FROM loans) FILE_FORMAT=(TYPE=PARQUET);
+-- COPY INTO @gcs_stage/salary FROM (SELECT * FROM salary) FILE_FORMAT=(TYPE=PARQUET);
 `
 
 const IBIS_HINT = `# Ibis pushdown: pandas-like Python compiled to warehouse SQL.
 # Pre-injected: ibis, con (warehouse backend), df (upstream frame as memtable, if any).
 #
-# t = con.table("analytics.mfs_ods_vasp_daily")
-# df = (t.filter(t.reference_date >= "2026-01-01")
-#         .group_by("projectid")
-#         .aggregate(loans=t.total_loans_count.sum()))
+# t = con.table("salary", database="employees")
+# df = (t.filter(t.from_date >= ibis.date(1990, 1, 1))
+#         .group_by(year=t.from_date.year())
+#         .aggregate(avg_salary=t.amount.mean()))
 # # leave the expression in df — SFS executes it in the warehouse
 `
 
@@ -265,10 +267,10 @@ const DUCKDB_HINT = `-- DuckDB engine: write SQL. The upstream frame is a table 
 -- spills to disk automatically for larger-than-RAM queries.
 --
 -- Examples:
--- SELECT * FROM df WHERE projectid = 'gh_mtn_mfs'
+-- SELECT * FROM df WHERE to_date = DATE '9999-01-01'   -- current salaries
 --
--- SELECT date_trunc('month', reference_date::DATE) AS month,
---        SUM(total_loans_count) AS loans
+-- SELECT date_trunc('year', from_date) AS year,
+--        AVG(amount) AS avg_salary
 -- FROM df GROUP BY 1 ORDER BY 1
 --
 -- Window functions, QUALIFY, PIVOT, list/struct types all supported.
@@ -667,18 +669,18 @@ const CHART_HINT = `# df is the incoming DataFrame
 #
 # ── Plotly ──────────────────────────────────────────────
 # import plotly.express as px
-# result = px.line(df, x='date', y='revenue', color='market')
+# result = px.line(df, x='year', y='avg_salary', color='dept_name')
 #
 # ── Matplotlib / Seaborn ────────────────────────────────
 # import matplotlib.pyplot as plt
 # fig, ax = plt.subplots(figsize=(10,5))
-# df.groupby('market')['revenue'].sum().plot(kind='bar', ax=ax)
+# df.groupby('dept_name')['amount'].mean().plot(kind='bar', ax=ax)
 #
 # ── ECharts ─────────────────────────────────────────────
 # result = {
-#   "xAxis": {"data": df['market'].tolist()},
+#   "xAxis": {"data": df['dept_name'].tolist()},
 #   "yAxis": {},
-#   "series": [{"type": "bar", "data": df['revenue'].tolist()}]
+#   "series": [{"type": "bar", "data": df['avg_salary'].tolist()}]
 # }
 `
 
@@ -830,7 +832,7 @@ export function ExplorePanel({ nodeId }: { nodeId: string }) {
       <div>
         <label className="label">Report name</label>
         <input className="input font-mono" value={name} onChange={(e) => setName(e.target.value)} onBlur={save}
-          placeholder="e.g. vasp_daily_explore (defaults to label)" />
+          placeholder="e.g. salary_explore (defaults to label)" />
         <p className="text-xs text-muted mt-1">
           Publishes the incoming DataFrame to the report viewer as a drag-and-drop
           Tableau-style explorer. No code needed — run the flow, then open the link on the node.
@@ -848,10 +850,10 @@ const REPORT_HINT = `# Streamlit dashboard code. Pre-injected: st, df (pandas), 
 #
 # c1, c2, c3 = st.columns(3)
 # c1.metric("Rows", len(df))
-# c2.metric("Loans", int(df['total_loans_count'].sum()))
+# c2.metric("Avg salary", f"{df['amount'].mean():,.0f}")
 #
-# df['month'] = pd.to_datetime(df['reference_date']).dt.to_period('M').astype(str)
-# st.bar_chart(df.groupby('month')['total_loans_count'].sum())
+# df['year'] = pd.to_datetime(df['from_date']).dt.year
+# st.bar_chart(df.groupby('year')['amount'].mean())
 # st.dataframe(df)
 `
 
@@ -898,7 +900,7 @@ export function ReportPanel({ nodeId }: { nodeId: string }) {
       <div className="shrink-0">
         <label className="label">Report name</label>
         <input className="input font-mono" value={name} onChange={(e) => setName(e.target.value)} onBlur={save}
-          placeholder="e.g. loans_dashboard (defaults to label)" />
+          placeholder="e.g. salary_dashboard (defaults to label)" />
       </div>
       <div className="shrink-0">
         <AgentBox

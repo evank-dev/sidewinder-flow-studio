@@ -44,10 +44,10 @@ Full Python flexibility. The incoming frame is `df`; leave the result in `df`.
 
 ```python
 # Read from a connection, transform, done
-engine = get_engine("Prod Postgres")
-df = pd.read_sql("SELECT * FROM pbi.mfs_ods_vasp_daily WHERE reference_date >= '2026-01-01'", engine)
-df['month'] = pd.to_datetime(df['reference_date']).dt.to_period('M').astype(str)
-df = df.groupby('month', as_index=False)['total_loans_count'].sum()
+engine = get_engine("postgres_local")
+df = pd.read_sql("SELECT * FROM employees.salary WHERE from_date >= '1990-01-01'", engine)
+df['year'] = pd.to_datetime(df['from_date']).dt.year
+df = df.groupby('year', as_index=False)['amount'].mean()
 ```
 
 ### 2. Polars (free)
@@ -56,10 +56,10 @@ Lazy and streaming — the upstream frame is scanned as a `LazyFrame`, nothing l
 
 ```python
 df = (df
-      .filter(pl.col("projectid") == "gh_mtn_mfs")
-      .with_columns(pl.col("reference_date").str.to_date().alias("d"))
-      .group_by(pl.col("d").dt.truncate("1mo"))
-      .agg(pl.col("total_loans_count").sum()))
+      .filter(pl.col("from_date") >= pl.date(1990, 1, 1))
+      .with_columns(pl.col("from_date").dt.year().alias("year"))
+      .group_by("year")
+      .agg(pl.col("amount").mean().alias("avg_salary")))
 ```
 
 ### 3. DuckDB (free)
@@ -75,8 +75,8 @@ WHERE year = 2026 GROUP BY region
 ```
 
 ```sql
-SELECT date_trunc('month', reference_date::DATE) AS month,
-       SUM(total_loans_count) AS loans
+SELECT date_trunc('year', from_date) AS year,
+       AVG(amount) AS avg_salary
 FROM df
 GROUP BY 1
 ORDER BY 1
@@ -87,11 +87,13 @@ ORDER BY 1
 The SQL executes **in the target warehouse**, not on your machine. Pick a target connection in the node. SFS transpiles dialects with SQLGlot, so you can write in one flavor and target another. `SELECT`/`WITH` results become the node output; DDL/DML commands (`CREATE TABLE AS`, `COPY INTO`, `LOAD DATA`, `MERGE`) execute without fetching — perfect for warehouse-to-warehouse orchestration.
 
 ```sql
--- Runs inside Snowflake; only the result crosses into SFS
-SELECT projectid, SUM(total_loans_count) AS loans
-FROM analytics.mfs_ods_vasp_daily
-WHERE reference_date >= DATE '2026-01-01'
-GROUP BY projectid
+-- Runs inside the warehouse; only the result crosses into SFS
+SELECT d.dept_name, AVG(s.amount) AS avg_salary
+FROM employees.salary s
+JOIN employees.department_employee de ON de.employee_id = s.employee_id
+JOIN employees.department d ON d.id = de.department_id
+WHERE s.to_date = DATE '9999-01-01' AND de.to_date = DATE '9999-01-01'
+GROUP BY d.dept_name
 ```
 
 ### 5. Ibis (enterprise)
@@ -99,10 +101,10 @@ GROUP BY projectid
 Pandas-like Python that compiles to warehouse SQL and executes there. Injected: `ibis`, `con` (the target backend), and `df` (upstream frame as a memtable, if any). Leave the result expression in `df`.
 
 ```python
-t = con.table("analytics.mfs_ods_vasp_daily")
-df = (t.filter(t.reference_date >= "2026-01-01")
-        .group_by("projectid")
-        .aggregate(loans=t.total_loans_count.sum()))
+t = con.table("salary", database="employees")
+df = (t.filter(t.from_date >= ibis.date(1990, 1, 1))
+        .group_by(year=t.from_date.year())
+        .aggregate(avg_salary=t.amount.mean()))
 ```
 
 ### Engines from plugins
@@ -155,7 +157,7 @@ A processor can have several upstream nodes. The first is `df`, the rest are `df
 
 **pandas — join:**
 ```python
-df = df.merge(df2, on='projectid', how='left')
+df = df.merge(df2, left_on='employee_id', right_on='id', how='left')   # salary ⋈ employee
 ```
 
 **pandas — union of all inputs:**
@@ -165,14 +167,14 @@ df = pd.concat(dfs, ignore_index=True)
 
 **DuckDB:**
 ```sql
-SELECT * FROM df JOIN df2 USING (projectid)
+SELECT * FROM df JOIN df2 ON df.employee_id = df2.id
 -- or
 SELECT * FROM df UNION ALL SELECT * FROM df2
 ```
 
 **Polars:**
 ```python
-df = df.join(df2, on="projectid", how="left")   # or pl.concat(dfs)
+df = df.join(df2, left_on="employee_id", right_on="id", how="left")   # or pl.concat(dfs)
 ```
 
 ---
@@ -326,11 +328,10 @@ Publish data products viewable by people who never open SFS — the optional Str
 ```python
 c1, c2, c3 = st.columns(3)
 c1.metric("Rows", len(df))
-c2.metric("Total loans", int(df['total_loans_count'].sum()))
-c3.metric("Projects", df['projectid'].nunique())
+c2.metric("Avg salary", f"{df['amount'].mean():,.0f}")
+c3.metric("Departments", df['dept_name'].nunique())
 
-df['month'] = pd.to_datetime(df['reference_date']).dt.to_period('M').astype(str)
-st.bar_chart(df.groupby('month')['total_loans_count'].sum())
+st.bar_chart(df.groupby('dept_name')['amount'].mean())
 st.dataframe(df)
 ```
 
@@ -344,7 +345,7 @@ The **Chart View** node renders inside the canvas. Set `result` to an ECharts op
 
 ```python
 # ECharts
-df_m = df.groupby('market')['revenue'].sum()
+df_m = df.groupby('dept_name')['amount'].mean()
 result = {
     "xAxis": {"data": df_m.index.tolist()},
     "yAxis": {},
@@ -355,7 +356,7 @@ result = {
 ```python
 # Plotly
 import plotly.express as px
-result = px.line(df, x="month", y="loans", color="projectid")
+result = px.line(df, x="year", y="avg_salary", color="dept_name")
 ```
 
 ---
@@ -383,24 +384,24 @@ On the **Trigger** node, switch Run Mode to **Schedule** and set a cron expressi
 
 ## Worked example: warehouse-to-warehouse transfer
 
-Move aggregated data from Snowflake to BigQuery, orchestrated by SFS — the data never touches your machine.
+Move salary data from Snowflake to BigQuery, orchestrated by SFS — the data never touches your machine.
 
 ```
 [Trigger: schedule 0 5 * * *]
         │
 [Processor · SQL engine · target = Snowflake]
-   COPY INTO @gcs_stage/loans
-   FROM (SELECT projectid, reference_date, total_loans_count
-         FROM analytics.mfs_ods_vasp_daily
-         WHERE reference_date >= DATEADD(day, -1, CURRENT_DATE))
+   COPY INTO @gcs_stage/salary
+   FROM (SELECT employee_id, amount, from_date, to_date
+         FROM employees.salary
+         WHERE from_date >= DATEADD(day, -1, CURRENT_DATE))
    FILE_FORMAT = (TYPE = PARQUET);
         │
 [Processor · SQL engine · target = BigQuery]
-   LOAD DATA INTO analytics.loans_daily
-   FROM FILES (format='PARQUET', uris=['gs://my-stage/loans/*']);
+   LOAD DATA INTO analytics.salary_daily
+   FROM FILES (format='PARQUET', uris=['gs://my-stage/salary/*']);
         │
 [Processor · SQL engine · target = BigQuery]   -- validation
-   SELECT COUNT(*) AS rows_loaded FROM analytics.loans_daily;
+   SELECT COUNT(*) AS rows_loaded FROM analytics.salary_daily;
         │
 [Table View]   -- the small validation result is fine to pull into pandas
 ```
