@@ -152,7 +152,7 @@ make docker-single          # same thing via Makefile
 make docker-single-down     # stop
 ```
 
-To include enterprise engines or warehouse drivers in the image, add them to `backend/pyproject.toml`'s dependencies (or the Dockerfile's pip install) before building.
+The image includes every warehouse driver and the enterprise engines by default. To change that, see [Choosing drivers for the Docker image](#choosing-drivers-for-the-docker-image).
 
 ---
 
@@ -208,6 +208,7 @@ REPORTS_PORT=8501      # report viewer port
 
 - All persistent data lives in the `flow_data` named volume. To use a host directory instead, uncomment the `driver_opts` bind block at the bottom of `docker-compose.yml` and point `device:` at your path.
 - The backend container reads env vars directly from the compose file (`PROJECTS_DIR=/data/...`, etc.) — you don't need a separate `backend/.env` in Docker mode.
+- The backend image is built with `SFS_EXTRAS=all-connectors,enterprise` by default — see [Choosing drivers for the Docker image](#choosing-drivers-for-the-docker-image).
 - To add AI or alerting in Docker, add the vars (`ANTHROPIC_API_KEY`, `SLACK_WEBHOOK_URL`, `SMTP_*`) to the `backend` service's `environment:` block.
 
 ---
@@ -231,6 +232,25 @@ pip install -e ".[all-connectors]" # everything above
 ```
 
 PostgreSQL, MySQL, SQLite, and Druid basics work out of the box.
+
+### Choosing drivers for the Docker image
+
+Both Docker setups install the backend with the pip extras named in the `SFS_EXTRAS` build argument. It defaults to `all-connectors,enterprise`, so every driver above and the SQL/Ibis engines are in the image. To build a smaller image, set it in `.env` before building:
+
+```ini
+SFS_EXTRAS=trino,enterprise   # any extras from the list above, comma-separated
+SFS_EXTRAS=                   # empty: core engines only (pandas, polars, duckdb)
+```
+
+Then rebuild: `docker compose up --build -d` (or `docker compose -f docker-compose.single.yml up --build -d`). Without Compose, pass it directly: `docker build --build-arg SFS_EXTRAS=trino ./backend`.
+
+The build log prints which drivers made it into the image, e.g.:
+
+```
+SFS drivers: 14/15 ok: snowflake bigquery clickhouse ... ibis | missing: mssql
+```
+
+`mssql` shows as missing in the stock image because `pyodbc` needs the OS-level ODBC libraries (see the note below).
 
 > **SQL Server note:** `pyodbc` needs the Microsoft ODBC Driver 18 installed at the OS level — that part can't come from pip.
 

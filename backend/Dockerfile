@@ -15,8 +15,11 @@ WORKDIR /app
 # package. A regular install reliably resolves and installs every dependency
 # declared in pyproject.toml; editable (-e) installs are for local dev and can
 # behave inconsistently inside containers.
+# Connector drivers and enterprise engines are optional extras in pyproject.toml.
+# Override with --build-arg SFS_EXTRAS=trino,enterprise (or SFS_EXTRAS= for core only).
+ARG SFS_EXTRAS=all-connectors,enterprise
 COPY . .
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir ".${SFS_EXTRAS:+[$SFS_EXTRAS]}"
 
 # httpx is sometimes skipped by pip's resolver as "already satisfied" in slim
 # base images even though it's not actually importable. Force it explicitly so
@@ -24,8 +27,8 @@ RUN pip install --no-cache-dir .
 RUN pip install --no-cache-dir --force-reinstall --no-deps "httpx>=0.27.0" \
     && python -c "import httpx; print('httpx', httpx.__version__, 'OK')"
 
-# Optional: install additional DB drivers or enterprise engines, e.g.:
-# RUN pip install --no-cache-dir ".[enterprise,snowflake,bigquery]"
+# One-line summary of installed connector drivers / enterprise engines.
+RUN python scripts/driver_summary.py
 
 # Create data directories
 RUN mkdir -p /data/projects /data/frame_cache /data/reports_data

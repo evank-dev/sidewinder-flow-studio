@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.single
+      args:
+        SFS_EXTRAS: "${SFS_EXTRAS-all-connectors,enterprise}"   # see .env.docker
     container_name: flow-studio
     restart: unless-stopped
     ports:

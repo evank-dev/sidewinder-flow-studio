@@ -23,13 +23,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install Python deps
-COPY backend/pyproject.toml ./
-RUN pip install --no-cache-dir -e . && \
-    pip install --no-cache-dir aiofiles
-
-# Copy backend code
+# Copy the backend, then install it as a regular (non-editable) package —
+# editable installs are for local dev and behave inconsistently in containers.
+# Connector drivers and enterprise engines are optional extras in pyproject.toml.
+# Override with --build-arg SFS_EXTRAS=trino,enterprise (or SFS_EXTRAS= for core only).
+ARG SFS_EXTRAS=all-connectors,enterprise
 COPY backend/ .
+RUN pip install --no-cache-dir ".${SFS_EXTRAS:+[$SFS_EXTRAS]}" aiofiles
+
+# One-line summary of installed connector drivers / enterprise engines.
+RUN python scripts/driver_summary.py
 
 # Copy built frontend into backend static dir
 COPY --from=frontend-builder /frontend/dist /app/static
