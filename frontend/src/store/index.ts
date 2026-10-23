@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Project, Connection, Variable, FlowMeta, NodeExecState, WsEvent } from '@/types'
+import type { Project, Connection, Variable, FlowMeta, NodeExecState, WsEvent, ExploreSource } from '@/types'
 import { api } from '@/utils/api'
 
 // ── Canvas sync callbacks ─────────────────────────────────────────────────────
@@ -58,6 +58,12 @@ interface AppState {
   sidebarWidth: number
   pinnedOutputNodeId: string | null   // which node's output to show in Output tab
 
+  // Top-level view: the flow editor, or Explore on a source
+  view: 'flows' | 'explore'
+  exploreSource: ExploreSource | null
+  openExplore: (source?: ExploreSource | null) => void
+  closeExplore: () => void
+
   loadProjects: () => Promise<void>
   openProject: (id: string) => Promise<void>
   closeProject: () => void
@@ -115,6 +121,11 @@ export const useStore = create<AppState>((set, get) => ({
   sidebarVisible: true,
   sidebarWidth: 380,
   pinnedOutputNodeId: null,
+
+  view: 'flows',
+  exploreSource: null,
+  openExplore: (source) => set((s) => ({ view: 'explore', exploreSource: source === undefined ? s.exploreSource : source })),
+  closeExplore: () => set({ view: 'flows' }),
 
   // ── Projects ───────────────────────────────────────────────────────────────
 

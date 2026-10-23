@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
 import { TopBar }     from '@/components/ui/TopBar'
 import { Canvas }     from '@/components/canvas/Canvas'
 import { NodeToolbar }from '@/components/canvas/NodeToolbar'
@@ -6,6 +6,10 @@ import { Sidebar }    from '@/components/panels/Sidebar'
 import { useStore }   from '@/store'
 import { useFlowWebSocket } from '@/hooks/useFlowWebSocket'
 import type { WsEvent } from '@/types'
+import { sourceFromHash } from '@/components/explore/source'
+
+// Graphic Walker is ~4 MB: load it only when Explore is opened.
+const ExploreView = lazy(() => import('@/components/explore/ExploreView'))
 
 function FlowCanvas({ flowId }: { flowId: string }) {
   const { handleWsEvent } = useStore()
@@ -43,12 +47,14 @@ function EmptyState() {
 }
 
 export default function App() {
-  const { loadProjects, loadConnections, loadVariables, activeProject, activeFlowId } = useStore()
+  const { loadProjects, loadConnections, loadVariables, activeProject, activeFlowId, view, openExplore } = useStore()
 
   useEffect(() => {
     loadProjects()
     loadConnections()
     loadVariables()
+    // Deep link: #/explore?kind=frame&project_id=…&node_id=…
+    if (window.location.hash.startsWith('#/explore')) openExplore(sourceFromHash(window.location.hash))
   }, [])
 
   // Ctrl+S to save
@@ -66,7 +72,13 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden">
       <TopBar />
-      <div className="flex flex-1 overflow-hidden">
+      {view === 'explore' && (
+        <Suspense fallback={<div className="flex-1 p-6 text-sm text-muted">Loading Explore…</div>}>
+          <ExploreView />
+        </Suspense>
+      )}
+      {/* Kept mounted while exploring so the canvas keeps its state. */}
+      <div className={`flex flex-1 overflow-hidden ${view === 'explore' ? 'hidden' : ''}`}>
         {activeProject && activeFlowId ? (
           <>
             <div className="flex flex-col flex-1 overflow-hidden min-w-0">

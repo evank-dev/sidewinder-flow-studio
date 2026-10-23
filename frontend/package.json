@@ -1,6 +1,6 @@
 {
   "name": "flow-studio-frontend",
-  "version": "1.18",
+  "version": "1.19",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@kanaries/graphic-walker": "0.4.82",
     "@monaco-editor/react": "^4.6.0",
     "echarts": "^5.5.1",
     "echarts-for-react": "^3.0.2",
@@ -19,6 +20,7 @@
     "react-dom": "^18.3.1",
     "react-plotly.js": "^2.6.0",
     "reactflow": "^11.11.4",
+    "styled-components": "5.3.11",
     "zustand": "^5.0.2"
   },
   "devDependencies": {

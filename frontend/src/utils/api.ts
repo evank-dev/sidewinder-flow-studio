@@ -1,4 +1,5 @@
-import type { Project, Connection, Variable, AgentProvider, RunRow } from '@/types'
+import type { Project, Connection, Variable, AgentProvider, RunRow,
+  ExploreSource, ExploreFrame, ExplorePersisted, ExploreField, ExploreQueryResult } from '@/types'
 
 const BASE = '/api'
 
@@ -91,6 +92,17 @@ export const api = {
     create: (data: object) =>
       req<any>('/custom-processors/', { method: 'POST', body: JSON.stringify(data) }),
     delete: (id: string) => req<void>(`/custom-processors/${id}`, { method: 'DELETE' }),
+  },
+
+  explore: {
+    sources: () =>
+      req<{ frames: ExploreFrame[]; persisted: ExplorePersisted[]; connections: { name: string; dialect: string }[] }>(
+        '/explore/sources'),
+    schema: (source: ExploreSource) =>
+      req<{ fields: ExploreField[]; rows?: number }>(
+        `/explore/schema?${new URLSearchParams(source as Record<string, string>)}`),
+    query: (source: ExploreSource, payload: object) =>
+      req<ExploreQueryResult>('/explore/query', { method: 'POST', body: JSON.stringify({ source, payload }) }),
   },
 
   agent: {

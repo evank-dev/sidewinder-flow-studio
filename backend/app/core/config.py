@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     # Persisted processor outputs (right-click → Persist)
     PERSIST_DB: str = "./reports_data/persist.duckdb"
 
+    # Explore guardrails: rows returned per chart query, and the time a cached
+    # (DuckDB) query may run before it is interrupted
+    EXPLORE_ROW_CAP: int = 50_000
+    EXPLORE_TIMEOUT_S: float = 30.0
+
     # Base URL of the optional Streamlit report viewer (for "Open report" links)
     REPORTS_URL: str = "http://localhost:8501"
 

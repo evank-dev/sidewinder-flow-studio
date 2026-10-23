@@ -8,6 +8,7 @@ request/response shape to whichever provider is active.
 """
 from __future__ import annotations
 
+import os
 import uuid
 import base64
 from typing import Any
@@ -120,7 +121,7 @@ async def _call_anthropic(provider: AgentProvider, system: str, user_message: st
     url = (provider.base_url or "https://api.anthropic.com").rstrip("/") + "/v1/messages"
     payload = {
         "model": provider.model,
-        "max_tokens": 1500,
+        "max_tokens": 4000,   # room for a full processor; 1500 truncated longer ones
         "system": system,
         "messages": [{"role": "user", "content": user_message}],
     }
@@ -165,7 +166,9 @@ async def _call_openai_compatible(provider: AgentProvider, system: str, user_mes
     if provider.api_key_enc:
         headers["authorization"] = f"Bearer {decrypt(provider.api_key_enc)}"
 
-    async with httpx.AsyncClient(timeout=120) as client:
+    # Local models on CPU can take minutes for one completion; a short timeout
+    # turns a slow-but-working Ollama into a ReadTimeout.
+    async with httpx.AsyncClient(timeout=600) as client:
         resp = await client.post(url, json=payload, headers=headers)
         resp.raise_for_status()
         data = resp.json()
@@ -177,6 +180,24 @@ async def complete(provider: AgentProvider, system: str, user_message: str) -> s
         return await _call_anthropic(provider, system, user_message)
     else:  # ollama or openai_compatible
         return await _call_openai_compatible(provider, system, user_message)
+
+
+def explain_error(provider: AgentProvider, exc: Exception) -> str:
+    """Turn a failed provider call into something actionable. The common case is
+    a local Ollama that the backend container can't reach."""
+    msg = str(exc) or type(exc).__name__
+    if not isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)):
+        return msg
+    from urllib.parse import urlparse
+    base = provider.base_url or ("http://localhost:11434" if provider.provider_type == "ollama" else "")
+    host = urlparse(base).hostname or ""
+    if host in ("localhost", "127.0.0.1", "::1") and os.path.exists("/.dockerenv"):
+        return (f"Can't reach {base}: inside Docker, localhost is the backend container itself. "
+                f"Use http://host.docker.internal:{urlparse(base).port or 11434} as the base URL.")
+    if host == "host.docker.internal" and provider.provider_type == "ollama":
+        return (f"Can't reach {base}. Ollama listens on 127.0.0.1 by default, which containers can't "
+                "reach — start it with OLLAMA_HOST=0.0.0.0:11434 (see docs/CAPABILITIES.md → AI providers).")
+    return f"Can't reach {base}: {msg}"
 
 
 async def test_provider(provider: AgentProvider) -> dict:
@@ -191,4 +212,4 @@ async def test_provider(provider: AgentProvider) -> dict:
     except httpx.HTTPStatusError as e:
         return {"ok": False, "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}"}
     except Exception as e:
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": explain_error(provider, e)}

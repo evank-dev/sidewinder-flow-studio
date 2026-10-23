@@ -310,7 +310,7 @@ Flow is review-before-insert: it shows the code, notes whether it had your schem
 
 Configure providers in the UI (keys encrypted at rest). Two-tier setup works nicely:
 
-- **Local** — Ollama pointing at `http://localhost:11434` with e.g. `qwen2.5-coder:7b`. No key, runs offline.
+- **Local** — Ollama with e.g. `qwen2.5-coder:7b`. No key, runs offline. Base URL: `http://localhost:11434` when the backend runs directly on your machine; `http://host.docker.internal:11434` when it runs in Docker. In the Docker case Ollama must also listen beyond loopback — it binds `127.0.0.1` by default, which containers can't reach — so start it with `OLLAMA_HOST=0.0.0.0:11434 ollama serve` (or set that variable in its systemd unit), and keep port 11434 closed to your network in the firewall, since Ollama has no authentication.
 - **Premium** — Anthropic Claude with an API key, or any OpenAI-compatible endpoint.
 
 Toggle the active provider with one click; the AgentBox shows which provider generated each snippet. Also supports a legacy `ANTHROPIC_API_KEY` in `.env` as a fallback.
@@ -322,6 +322,8 @@ Toggle the active provider with one click; the AgentBox shows which provider gen
 Publish data products viewable by people who never open SFS — the optional Streamlit viewer reads a shared DuckDB file.
 
 **Explore node** — no code. Set a report name, run the flow, open the link on the node. You get a PyGWalker drag-and-drop, Tableau-style explorer over the data.
+
+**Explore view** — the **Explore** button in the top bar opens a drag-and-drop explorer (Graphic Walker) inside SFS, over any node output from a flow run or any persisted table. Charts are compiled to SQL and run by DuckDB on the server, so a 30M-row frame answers in well under a second and only the aggregated result reaches the browser. **Show SQL** at the bottom lists every query with its timings. Guardrails: a view returns at most `EXPLORE_ROW_CAP` rows (default 50,000; a banner says when it was capped) and a query is stopped after `EXPLORE_TIMEOUT_S` seconds (default 30). A view can be bookmarked — the URL carries the source (`#/explore?kind=frame&project_id=…&node_id=…`). Live database sources follow in a later release.
 
 **Report node** — authored dashboard. Write Streamlit code (or have the AI draft it). Pre-injected: `st`, `df`, `pd`.
 

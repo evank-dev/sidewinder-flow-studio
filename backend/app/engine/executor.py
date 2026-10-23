@@ -322,6 +322,9 @@ def build_exec_context(
                 raw.close()
             return n
 
+        # ClickHouse works on Arrow directly: going through pandas would turn
+        # nullable integer columns into Float64.
+        src = df
         # Remaining paths work on pandas. Normalise Polars / Arrow input, and
         # create the table if it does not exist yet.
         df = _to_pandas(df)
@@ -337,22 +340,45 @@ def build_exec_context(
                 df.head(0).to_sql(name, eng_, schema=schema, if_exists="fail", index=False)
 
         # ── ClickHouse: native block insert via clickhouse driver ──────────
+        # pandas can't create ClickHouse tables (they need an ENGINE), so a
+        # missing table is created here from the frame's Arrow schema.
         if dialect == "clickhouse":
+            import pyarrow as _pa
+            arrow = _to_arrow_table(src)
             eng = get_engine(connection_name)
-            if mode == "replace":
-                with eng.begin() as c:
-                    c.exec_driver_sql(f"TRUNCATE TABLE {table}")
-            # SQLAlchemy executemany with clickhouse-sqlalchemy sends a single
-            # native multi-row INSERT (block), which is the fast path here.
-            cols = list(df.columns)
-            collist = ", ".join(cols)
-            placeholders = ", ".join([f"%({c})s" for c in cols])
-            records = df.to_dict("records")
+            target = _ch_ident(schema, name)
             with eng.begin() as c:
-                c.exec_driver_sql(
-                    f"INSERT INTO {table} ({collist}) VALUES",
-                    records,
-                )
+                if recreate:
+                    c.exec_driver_sql(f"DROP TABLE IF EXISTS {target}")
+                exists = c.exec_driver_sql(f"EXISTS TABLE {target}").scalar()
+                if not int(exists or 0):
+                    if schema:
+                        c.exec_driver_sql(f"CREATE DATABASE IF NOT EXISTS {_ch_ident(schema)}")
+                    arrow_schema = arrow.schema
+                    cols_ddl = ", ".join(f"{_ch_ident(f.name)} {_ch_type(f.type)}" for f in arrow_schema)
+                    c.exec_driver_sql(
+                        f"CREATE TABLE {target} ({cols_ddl}) ENGINE = MergeTree ORDER BY tuple()")
+                elif mode == "replace":
+                    c.exec_driver_sql(f"TRUNCATE TABLE {target}")
+            # SFS connects to ClickHouse over HTTP, where executemany cannot send
+            # row dicts (they arrive as empty values). Post the data columnar
+            # instead: one ArrowStream body per chunk, using the engine's URL.
+            import httpx
+            u = eng.url
+            proto = "https" if u.query.get("protocol") == "https" else "http"
+            base = f"{proto}://{u.host}:{u.port or (8443 if proto == 'https' else 8123)}/"
+            collist = ", ".join(_ch_ident(c) for c in arrow.column_names)
+            params = {"query": f"INSERT INTO {target} ({collist}) FORMAT ArrowStream",
+                      "database": u.database or "default"}
+            chunk = int(kwargs.get("chunk_rows", 100_000))
+            with httpx.Client(auth=(u.username or "default", u.password or ""), timeout=600) as http:
+                for batch in arrow.to_batches(max_chunksize=chunk):
+                    sink = _pa.BufferOutputStream()
+                    with _pa.ipc.new_stream(sink, arrow.schema) as w:
+                        w.write_batch(batch)
+                    r = http.post(base, params=params, content=sink.getvalue().to_pybytes())
+                    if r.status_code != 200:
+                        raise RuntimeError(f"ClickHouse insert into {table} failed: {r.text[:500]}")
             return n
 
         # ── Iceberg via pyiceberg (direct catalog write) ───────────────────
@@ -600,6 +626,36 @@ def _pg_type(t) -> str:
     return "TEXT"
 
 
+def _ch_ident(*parts) -> str:
+    """Backtick-quoted ClickHouse identifier, e.g. `db`.`table`."""
+    return ".".join("`" + p.replace("`", "``") + "`" for p in parts if p)
+
+
+def _ch_type(t) -> str:
+    """Arrow type → ClickHouse column type for auto-created tables (all Nullable)."""
+    import pyarrow.types as at
+    if at.is_dictionary(t):
+        t = t.value_type
+    if at.is_boolean(t):     inner = "Bool"
+    elif at.is_int8(t):      inner = "Int8"
+    elif at.is_int16(t):     inner = "Int16"
+    elif at.is_int32(t):     inner = "Int32"
+    elif at.is_uint8(t):     inner = "UInt8"
+    elif at.is_uint16(t):    inner = "UInt16"
+    elif at.is_uint32(t):    inner = "UInt32"
+    elif at.is_uint64(t):    inner = "UInt64"
+    elif at.is_integer(t):   inner = "Int64"
+    elif at.is_float32(t) or at.is_float16(t): inner = "Float32"
+    elif at.is_floating(t):  inner = "Float64"
+    elif at.is_decimal(t):   inner = f"Decimal({t.precision}, {t.scale})"
+    elif at.is_date(t):      inner = "Date32"
+    elif at.is_timestamp(t):
+        prec = {"s": 0, "ms": 3, "us": 6, "ns": 9}[t.unit]
+        inner = f"DateTime64({prec}, '{t.tz}')" if t.tz else f"DateTime64({prec})"
+    else:                    inner = "String"
+    return f"Nullable({inner})"
+
+
 def _pg_table_exists(cur, schema: str | None, name: str) -> bool:
     cur.execute(
         "SELECT 1 FROM information_schema.tables "
@@ -740,13 +796,8 @@ def exec_duckdb_processor(sql: str, frame_paths: list[str] | None = None,
             attached.append(name)
             con.register(name, _duckdb_scan(path))
 
-        result = con.execute(sql)
-        out = result.arrow()
-        # duckdb >= 1.5 returns a streaming RecordBatchReader from .arrow();
-        # older versions return a materialized pyarrow.Table. Normalize to Table.
-        if not isinstance(out, pa.Table):
-            out = out.read_all()
-        return out   # result back as Arrow, straight to cache
+        from app.core.duckdb_arrow import result_to_arrow
+        return result_to_arrow(con.execute(sql))   # Arrow, straight to cache
     finally:
         con.close()
 

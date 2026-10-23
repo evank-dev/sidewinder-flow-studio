@@ -100,6 +100,9 @@ Write pandas code for a TRANSFORM processor. Rules:
 - The incoming DataFrame is `df` (additional inputs df2, df3 if the spec mentions them); pd, sa, vars are available
 - You are told the upstream columns — use ONLY those columns as inputs; do not invent columns
 - Apply the user's described transformation and leave the result in `df`
+- Column types are unknown at this point (dates may be strings or Python date objects), so convert BOTH sides before comparing dates:
+  df['to_date'] = pd.to_datetime(df['to_date'])
+  df = df[df['to_date'] == pd.Timestamp('9999-01-01')]
 - If the user declared expected output columns, make your code produce exactly those names
 - End your response with a comment line listing the exact output columns: # OUTPUT_COLUMNS: col1, col2, ...
 - Output ONLY Python code, no markdown fences, no explanations"""
@@ -129,7 +132,7 @@ You write Python code for a "Processor" node. Rules:
 - Do NOT include markdown code fences, explanations, or any text outside the code
 - Output ONLY the Python code, nothing else
 - If you need additional imports (numpy, datetime, etc.), include them at the top
-- Handle data types carefully — dates from SQL often arrive as strings and need pd.to_datetime()"""
+- Handle data types carefully — dates from SQL often arrive as strings or Python date objects (dtype object); convert with pd.to_datetime() before comparing"""
 
 
 CHART_SYSTEM_PROMPT = """You are a data visualisation assistant inside Sidewinder Flow Studio (SFS), a visual Python ETL tool.
@@ -231,7 +234,8 @@ async def generate_code(
                 except httpx.HTTPStatusError as e:
                     return {"code": None, "error": f"{provider.name}: HTTP {e.response.status_code}: {e.response.text[:200]}", "provider": provider.name}
                 except Exception as e:
-                    return {"code": None, "error": f"{provider.name}: {str(e)}", "provider": provider.name}
+                    from app.services.agent_provider_service import explain_error
+                    return {"code": None, "error": f"{provider.name}: {explain_error(provider, e)}", "provider": provider.name}
         except Exception:
             pass  # fall through to env fallback
 
@@ -252,7 +256,7 @@ async def generate_code(
 
     payload = {
         "model": AGENT_MODEL,
-        "max_tokens": 1500,
+        "max_tokens": 4000,
         "system": system,
         "messages": [{"role": "user", "content": user_message}],
     }

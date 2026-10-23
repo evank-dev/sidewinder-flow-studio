@@ -42,8 +42,9 @@ editing node code, flows, or SFS source.
 - **polars**: `df` is a LazyFrame (scan of upstream IPC). Stay lazy; do NOT
   call `.collect()` — SFS collects (streaming). `pl` injected.
 - **duckdb**: code is SQL; upstream frame is table `df` (also `df2`, `df3`).
-  Query result becomes the output. Note duckdb >= 1.5: `.arrow()` may return a
-  RecordBatchReader — SFS normalizes with `.read_all()`.
+  Query result becomes the output. SFS fetches it with
+  `app/core/duckdb_arrow.result_to_arrow`, which covers the DuckDB 1.x
+  (`.arrow()`) and 2.x (`.to_arrow_table()`) APIs — use it, not those calls.
 - **sql** (enterprise, pushdown): SQL runs IN the target connection's warehouse
   (SQLGlot transpiles dialects). SELECT/WITH results are fetched as the frame;
   DDL/DML (CREATE/COPY/LOAD/MERGE) execute without fetching. Upstream frame is
@@ -113,8 +114,10 @@ fast_write(df, "postgres_local", "public.forex", mode="replace")   # append | re
 fast_write(df, "play_clickhouse", "bi.forex", mode="append")
 ```
 
-Native paths by dialect: **postgresql** → COPY; **clickhouse** → native block
-insert; **mssql** → pyodbc `fast_executemany`; **mysql / starrocks / doris** →
+Native paths by dialect: **postgresql** → COPY; **clickhouse** → Arrow
+(`FORMAT ArrowStream`) posted over HTTP in 100k-row chunks, creating a missing
+`MergeTree` table with Nullable columns — feed it from a Polars or DuckDB node
+to keep integer types (pandas widens nullable ints to Float64); **mssql** → pyodbc `fast_executemany`; **mysql / starrocks / doris** →
 driver-batched `executemany`; **oracle** → array binding; **iceberg** →
 pyiceberg file append (needs `iceberg_catalog=` + `catalog_props=` — a Trino
 connection can query Iceberg but cannot bulk-load it). Any other dialect falls

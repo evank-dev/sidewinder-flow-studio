@@ -124,11 +124,8 @@ def load_persist(table_name: str) -> pa.Table:
     tbl = sanitize_table(table_name)
     con = duckdb.connect(_persist_db(), read_only=True)
     try:
-        out = con.execute(f'SELECT * FROM "{tbl}"').arrow()
-        # duckdb >= 1.5: .arrow() may return a RecordBatchReader — normalize
-        if not isinstance(out, pa.Table):
-            out = out.read_all()
-        return out
+        from app.core.duckdb_arrow import result_to_arrow
+        return result_to_arrow(con.execute(f'SELECT * FROM "{tbl}"'))
     finally:
         con.close()
 

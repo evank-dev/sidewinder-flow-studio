@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Play, Save, Plus, FolderOpen, ChevronDown, Square, RefreshCw } from 'lucide-react'
+import { Play, Save, Plus, FolderOpen, ChevronDown, Square, RefreshCw, Compass } from 'lucide-react'
 import { useStore } from '@/store'
 import { AboutDialog } from './AboutDialog'
 
@@ -11,6 +11,7 @@ export function TopBar() {
     addFlow, deleteFlow, toggleFlowActive, setActiveFlow,
     renameFlow, activeFlow,
     runError, clearRunError,
+    view, openExplore, closeExplore,
   } = useStore()
 
   const [showProjects, setShowProjects] = useState(false)
@@ -158,7 +159,7 @@ export function TopBar() {
                 ${activeFlowId === f.id
                   ? 'border-accent/50 bg-accent/10 text-accent'
                   : 'border-canvas-border text-muted hover:text-slate-300'}`}
-              onClick={() => setActiveFlow(f.id)}
+              onClick={() => { setActiveFlow(f.id); closeExplore() }}
             >
               {/* Active/inactive dot */}
               <div
@@ -223,6 +224,13 @@ export function TopBar() {
 
       {/* Right actions */}
       <div className="flex items-center gap-2 ml-auto shrink-0">
+        <button
+          className={view === 'explore' ? 'btn-pri gap-1.5' : 'btn-ghost gap-1.5 border border-canvas-border'}
+          onClick={() => (view === 'explore' ? closeExplore() : openExplore())}
+          title={view === 'explore' ? 'Back to flows' : 'Explore cached node outputs and persisted tables'}
+        >
+          <Compass size={13} /> <span className="text-xs">Explore</span>
+        </button>
         {activeProject && (
           <>
             <button
