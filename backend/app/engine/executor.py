@@ -740,13 +740,8 @@ def exec_duckdb_processor(sql: str, frame_paths: list[str] | None = None,
             attached.append(name)
             con.register(name, _duckdb_scan(path))
 
-        result = con.execute(sql)
-        out = result.arrow()
-        # duckdb >= 1.5 returns a streaming RecordBatchReader from .arrow();
-        # older versions return a materialized pyarrow.Table. Normalize to Table.
-        if not isinstance(out, pa.Table):
-            out = out.read_all()
-        return out   # result back as Arrow, straight to cache
+        from app.core.duckdb_arrow import result_to_arrow
+        return result_to_arrow(con.execute(sql))   # Arrow, straight to cache
     finally:
         con.close()
 
