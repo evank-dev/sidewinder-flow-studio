@@ -9,7 +9,7 @@ from pathlib import Path
 from app.core.config import settings
 from app.core.database import init_db
 from app.scheduler.scheduler import start_scheduler, stop_scheduler
-from app.api import projects, connections, execute, metadata, ws, agent, runs, custom_processors, capabilities
+from app.api import projects, connections, execute, metadata, ws, agent, runs, custom_processors, capabilities, explore
 
 
 @asynccontextmanager
@@ -66,6 +66,7 @@ def create_app() -> FastAPI:
     app.include_router(runs.router,        prefix="/api/runs",        tags=["runs"])
     app.include_router(custom_processors.router, prefix="/api/custom-processors", tags=["custom"])
     app.include_router(capabilities.router, prefix="/api/capabilities", tags=["capabilities"])
+    app.include_router(explore.router,     prefix="/api/explore",     tags=["explore"])
     app.include_router(ws.router,          prefix="/ws",              tags=["websocket"])
 
     # Single-container mode: serve built React as static files

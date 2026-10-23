@@ -29,6 +29,10 @@ dependencies = [
     "python-multipart>=0.0.12",
     "croniter>=3.0.0",
     "httpx>=0.27.0",
+    # Explore: Graphic Walker DSL → SQL. Pinned — app/explore/compiler.py loads
+    # its WASM build directly and drives it through the wasmtime API.
+    "gw-dsl-parser==0.1.49.1",
+    "wasmtime==50.0.1",
 ]
 
 [project.optional-dependencies]
