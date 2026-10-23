@@ -310,7 +310,7 @@ Flow is review-before-insert: it shows the code, notes whether it had your schem
 
 Configure providers in the UI (keys encrypted at rest). Two-tier setup works nicely:
 
-- **Local** — Ollama pointing at `http://localhost:11434` with e.g. `qwen2.5-coder:7b`. No key, runs offline.
+- **Local** — Ollama with e.g. `qwen2.5-coder:7b`. No key, runs offline. Base URL: `http://localhost:11434` when the backend runs directly on your machine; `http://host.docker.internal:11434` when it runs in Docker. In the Docker case Ollama must also listen beyond loopback — it binds `127.0.0.1` by default, which containers can't reach — so start it with `OLLAMA_HOST=0.0.0.0:11434 ollama serve` (or set that variable in its systemd unit), and keep port 11434 closed to your network in the firewall, since Ollama has no authentication.
 - **Premium** — Anthropic Claude with an API key, or any OpenAI-compatible endpoint.
 
 Toggle the active provider with one click; the AgentBox shows which provider generated each snippet. Also supports a legacy `ANTHROPIC_API_KEY` in `.env` as a fallback.

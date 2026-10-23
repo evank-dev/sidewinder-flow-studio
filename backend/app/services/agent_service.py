@@ -231,7 +231,8 @@ async def generate_code(
                 except httpx.HTTPStatusError as e:
                     return {"code": None, "error": f"{provider.name}: HTTP {e.response.status_code}: {e.response.text[:200]}", "provider": provider.name}
                 except Exception as e:
-                    return {"code": None, "error": f"{provider.name}: {str(e)}", "provider": provider.name}
+                    from app.services.agent_provider_service import explain_error
+                    return {"code": None, "error": f"{provider.name}: {explain_error(provider, e)}", "provider": provider.name}
         except Exception:
             pass  # fall through to env fallback
 
@@ -252,7 +253,7 @@ async def generate_code(
 
     payload = {
         "model": AGENT_MODEL,
-        "max_tokens": 1500,
+        "max_tokens": 4000,
         "system": system,
         "messages": [{"role": "user", "content": user_message}],
     }

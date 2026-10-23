@@ -24,7 +24,7 @@ const MODEL_HINTS: Record<string, string> = {
 
 const URL_HINTS: Record<string, string> = {
   anthropic: 'https://api.anthropic.com (optional)',
-  ollama: 'http://localhost:11434',
+  ollama: 'http://host.docker.internal:11434 (Docker) · http://localhost:11434 (local)',
   openai_compatible: 'https://your-endpoint/v1',
 }
 
