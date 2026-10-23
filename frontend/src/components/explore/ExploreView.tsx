@@ -216,6 +216,9 @@ function Walker({ source, fields }: { source: ExploreSource; fields: ExploreFiel
           appearance="dark"
           uiTheme={SFS_THEME}
           computationTimeout={120_000}
+          // Drops the "kanaries docs" button, whose logo is fetched from an
+          // external CDN — Explore must work offline.
+          toolbar={{ exclude: ['kanaries'] }}
         />
       </div>
       <div className="shrink-0 border-t border-canvas-border bg-surface">
