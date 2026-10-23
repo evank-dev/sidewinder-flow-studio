@@ -62,6 +62,10 @@ REPORTS_DIR=./reports_data
 PERSIST_DB=./reports_data/persist.duckdb
 REPORTS_URL=http://localhost:8501
 
+# Optional: Explore guardrails — max rows per chart query, query time limit
+EXPLORE_ROW_CAP=50000
+EXPLORE_TIMEOUT_S=30
+
 # Optional: AI agent (or configure providers in the UI instead)
 ANTHROPIC_API_KEY=
 

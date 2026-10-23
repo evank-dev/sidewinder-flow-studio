@@ -323,6 +323,8 @@ Publish data products viewable by people who never open SFS — the optional Str
 
 **Explore node** — no code. Set a report name, run the flow, open the link on the node. You get a PyGWalker drag-and-drop, Tableau-style explorer over the data.
 
+**Explore view** — the **Explore** button in the top bar opens a drag-and-drop explorer (Graphic Walker) inside SFS, over any node output from a flow run or any persisted table. Charts are compiled to SQL and run by DuckDB on the server, so a 30M-row frame answers in well under a second and only the aggregated result reaches the browser. **Show SQL** at the bottom lists every query with its timings. Guardrails: a view returns at most `EXPLORE_ROW_CAP` rows (default 50,000; a banner says when it was capped) and a query is stopped after `EXPLORE_TIMEOUT_S` seconds (default 30). A view can be bookmarked — the URL carries the source (`#/explore?kind=frame&project_id=…&node_id=…`). Live database sources follow in a later release.
+
 **Report node** — authored dashboard. Write Streamlit code (or have the AI draft it). Pre-injected: `st`, `df`, `pd`.
 
 ```python

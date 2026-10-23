@@ -208,3 +208,51 @@ export interface RunRow {
   nodes_error?: number
   error?: string
 }
+
+// ── Explore ───────────────────────────────────────────────────────────────────
+
+export type ExploreSource =
+  | { kind: 'frame'; project_id: string; node_id: string }
+  | { kind: 'persist'; table: string }
+  | { kind: 'table'; connection: string; table: string }
+
+export interface ExploreFrame {
+  kind: 'frame'
+  project_id: string
+  node_id: string
+  project: string
+  flow: string
+  label: string
+  node_type?: string
+  rows: number
+  columns: number
+  column_names: string[]
+  size_bytes: number
+  updated_at: number
+}
+
+export interface ExplorePersisted {
+  kind: 'persist'
+  table: string
+  label: string
+  rows: number
+  columns: number
+  node?: string | null
+}
+
+export interface ExploreField {
+  fid: string
+  name: string
+  sqlType: string
+  semanticType: 'quantitative' | 'nominal' | 'ordinal' | 'temporal'
+  analyticType: 'dimension' | 'measure'
+}
+
+export interface ExploreQueryResult {
+  rows: Record<string, unknown>[]
+  sql: string
+  truncated: boolean
+  row_cap: number
+  compile_ms: number
+  exec_ms: number
+}

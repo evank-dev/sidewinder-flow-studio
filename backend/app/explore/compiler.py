@@ -91,7 +91,24 @@ def compile(payload: dict, fields: list[dict] | None = None, relation: str = REL
     # The parser reports failures as text rather than raising.
     if not sql.lstrip().upper().startswith(("SELECT", "WITH")):
         raise CompileError(sql or "Graphic Walker query could not be compiled")
-    return sql
+    return _floor_bin_count(sql)
+
+
+def _floor_bin_count(sql: str) -> str:
+    """Fix the parser's binCount op, which emits `least((x - min) / step, n-1) + 1`
+    without floor(), so every distinct value becomes its own "bin". The `bin` op
+    floors correctly (`least(floor(...), n-1)`), so only an unfloored division
+    as least()'s first argument is rewritten."""
+    if "least((" not in sql:
+        return sql
+    import sqlglot
+    from sqlglot import exp
+
+    def fix(node):
+        if isinstance(node, exp.Least) and isinstance(node.this.unnest(), exp.Div):
+            node.set("this", exp.Floor(this=node.this))
+        return node
+    return sqlglot.parse_one(sql, read="duckdb").transform(fix).sql(dialect="duckdb")
 
 
 def to_dialect(sql: str, dialect: str) -> str:
