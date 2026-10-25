@@ -389,7 +389,7 @@ export function ProcessorPanel({ nodeId }: { nodeId: string }) {
   })()
 
   return (
-    <div className="p-4 space-y-3 h-full flex flex-col">
+    <div className="p-4 space-y-3 min-h-full flex flex-col">
       <h3 className="text-xs font-semibold text-muted uppercase tracking-wider shrink-0">
         Processor
       </h3>
@@ -518,7 +518,7 @@ export function ProcessorPanel({ nodeId }: { nodeId: string }) {
         />
       )}
 
-      <div className="flex-1 flex flex-col min-h-0">
+      <div className="flex-1 flex flex-col min-h-[360px]">
         {inputVars.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap mb-1.5 shrink-0">
             <span className="text-xs text-muted">Inputs:</span>
