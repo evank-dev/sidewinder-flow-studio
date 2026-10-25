@@ -1,5 +1,5 @@
 import type { Project, Connection, Variable, AgentProvider, RunRow,
-  ExploreSource, ExploreFrame, ExplorePersisted, ExploreField, ExploreQueryResult } from '@/types'
+  ExploreSource, ExploreFrame, ExplorePersisted, ExploreField, ExploreQueryResult, ExploreTable } from '@/types'
 
 const BASE = '/api'
 
@@ -98,8 +98,10 @@ export const api = {
     sources: () =>
       req<{ frames: ExploreFrame[]; persisted: ExplorePersisted[]; connections: { name: string; dialect: string }[] }>(
         '/explore/sources'),
+    tables: (connection: string) =>
+      req<{ tables: ExploreTable[]; truncated: boolean }>(`/explore/tables?${new URLSearchParams({ connection })}`),
     schema: (source: ExploreSource) =>
-      req<{ fields: ExploreField[]; rows?: number }>(
+      req<{ fields: ExploreField[]; rows?: number | null }>(
         `/explore/schema?${new URLSearchParams(source as Record<string, string>)}`),
     query: (source: ExploreSource, payload: object) =>
       req<ExploreQueryResult>('/explore/query', { method: 'POST', body: JSON.stringify({ source, payload }) }),

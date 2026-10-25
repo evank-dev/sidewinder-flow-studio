@@ -91,7 +91,52 @@ def compile(payload: dict, fields: list[dict] | None = None, relation: str = REL
     # The parser reports failures as text rather than raising.
     if not sql.lstrip().upper().startswith(("SELECT", "WITH")):
         raise CompileError(sql or "Graphic Walker query could not be compiled")
-    return _floor_bin_count(sql)
+    sql = _floor_bin_count(sql)
+    if fields:
+        naive = {f["key"] for f in field_meta(fields, relation)[relation] if f["type"] == "datetime"}
+        sql = _sargable_time_filters(sql, naive)
+    return sql
+
+
+def _sargable_time_filters(sql: str, naive_columns: set[str]) -> str:
+    """Rewrite the parser's temporal range filter
+
+        CAST(EXTRACT(EPOCH FROM ts) * 1000 AS BIGINT) BETWEEN <ms> AND <ms>
+
+    to `ts BETWEEN TIMESTAMP '…' AND TIMESTAMP '…'`. Wrapping the column hides
+    it from indexes and partition pruning, and the epoch expression does not
+    transpile to every database (SQL Server has no EPOCH datepart; MySQL's
+    UNIX_TIMESTAMP applies the session time zone). Equivalent only for
+    timestamps stored without a zone, so other columns are left alone.
+    """
+    if "EXTRACT(EPOCH" not in sql or not naive_columns:
+        return sql
+    from datetime import datetime, timedelta, timezone
+
+    import sqlglot
+    from sqlglot import exp
+
+    def ts(lit):
+        ms = int(lit.this)
+        t = datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(milliseconds=ms)
+        # Millisecond precision, like the filter values: TIMESTAMP(3) becomes
+        # DateTime64(3) / DATETIME2(3) / … so a range ending at .999 keeps its last second.
+        return exp.cast(exp.Literal.string(t.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]),
+                        exp.DataType.build("TIMESTAMP(3)", dialect="duckdb"))
+
+    def fix(node):
+        if not isinstance(node, exp.Between):
+            return node
+        cast, low, high = node.this, node.args.get("low"), node.args.get("high")
+        mul = cast.this if isinstance(cast, exp.Cast) else None
+        ext = mul.this if isinstance(mul, exp.Mul) else None
+        if not (isinstance(ext, exp.Extract) and ext.this.name.upper() == "EPOCH"
+                and isinstance(ext.expression, exp.Column) and ext.expression.name in naive_columns
+                and isinstance(mul.expression, exp.Literal) and mul.expression.this == "1000"
+                and all(isinstance(v, exp.Literal) and not v.is_string for v in (low, high))):
+            return node
+        return exp.Between(this=ext.expression.copy(), low=ts(low), high=ts(high))
+    return sqlglot.parse_one(sql, read="duckdb").transform(fix).sql(dialect="duckdb")
 
 
 def _floor_bin_count(sql: str) -> str:

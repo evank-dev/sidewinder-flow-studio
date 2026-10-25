@@ -215,6 +215,14 @@ export type ExploreSource =
   | { kind: 'frame'; project_id: string; node_id: string }
   | { kind: 'persist'; table: string }
   | { kind: 'table'; connection: string; table: string }
+  | { kind: 'sql'; connection: string; sql: string }
+
+export interface ExploreTable {
+  schema: string
+  name: string
+  kind: 'table' | 'view'
+  rows: number | null
+}
 
 export interface ExploreFrame {
   kind: 'frame'
@@ -253,6 +261,7 @@ export interface ExploreQueryResult {
   sql: string
   truncated: boolean
   row_cap: number
+  dialect: string
   compile_ms: number
   exec_ms: number
 }

@@ -2,11 +2,10 @@
 
     frame    — a cached node frame (Arrow IPC), queried by DuckDB without loading it
     persist  — a table in persist.duckdb, attached read-only for one query
-    table    — a table on an SFS connection, queried live in that database
 
-Each source exposes its data as the relation `compiler.RELATION`, so the same
-compiled SQL works for all of them: a DuckDB view over the frame or persisted
-table, or a CTE over the table for live connections.
+Live sources (a table or SQL on a connection) are in app/explore/live.py.
+Every source exposes its data as the relation `compiler.RELATION`, so the
+same compiled SQL works for all of them.
 """
 from __future__ import annotations
 
@@ -210,44 +209,3 @@ def list_cached() -> dict:
             finally:
                 con.close()
     return {"frames": frames, "persisted": persisted}
-
-
-# ── table (live) ──────────────────────────────────────────────────────────────
-
-def _live_sql(compiled: str, table: str, dialect: str) -> str:
-    """Attach the source table as a CTE named RELATION, then transpile."""
-    import sqlglot
-    from sqlglot import exp
-
-    tree = sqlglot.parse_one(compiled, read="duckdb")
-    src = exp.select("*").from_(exp.to_table(table, dialect=dialect))
-    tree = tree.with_(compiler.RELATION, as_=src)
-    if dialect == "clickhouse":
-        # ClickHouse median() is a sampled estimate; DuckDB median is exact and
-        # interpolates between the two middle values, as quantileExactInclusive does.
-        tree = tree.transform(lambda n: exp.ParameterizedAgg(
-            this="quantileExactInclusive", expressions=[exp.Literal.number(0.5)], params=[n.this],
-        ) if isinstance(n, exp.Median) else n)
-    return tree.sql(dialect=dialect)
-
-
-def table_schema(engine, table: str) -> list[dict]:
-    import sqlalchemy as sa
-    schema, _, name = table.rpartition(".")
-    cols = sa.inspect(engine).get_columns(name, schema=schema or None)
-    return [gw_field(c["name"], str(c["type"])) for c in cols]
-
-
-def table_query(engine, dialect: str, table: str, payload: dict, cap: int | None = None) -> Result:
-    cap = cap or settings.EXPLORE_ROW_CAP
-    t0 = time.perf_counter()
-    sql = _live_sql(compiler.compile(payload, table_schema(engine, table)), table, dialect)
-    t1 = time.perf_counter()
-    with engine.connect() as c:
-        # exec_driver_sql: no bind-parameter parsing, so `::` casts survive
-        cur = c.exec_driver_sql(_capped(sql, cap))
-        cols = list(cur.keys())
-        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
-    t2 = time.perf_counter()
-    log.info("explore live %s %.0f ms: %s", table, (t2 - t1) * 1000, sql)
-    return Result(rows[:cap], sql, (t1 - t0) * 1000, (t2 - t1) * 1000, len(rows) > cap)

@@ -323,7 +323,16 @@ Publish data products viewable by people who never open SFS — the optional Str
 
 **Explore node** — no code. Set a report name, run the flow, open the link on the node. You get a PyGWalker drag-and-drop, Tableau-style explorer over the data.
 
-**Explore view** — the **Explore** button in the top bar opens a drag-and-drop explorer (Graphic Walker) inside SFS, over any node output from a flow run or any persisted table. Charts are compiled to SQL and run by DuckDB on the server, so a 30M-row frame answers in well under a second and only the aggregated result reaches the browser. **Show SQL** at the bottom lists every query with its timings. Guardrails: a view returns at most `EXPLORE_ROW_CAP` rows (default 50,000; a banner says when it was capped) and a query is stopped after `EXPLORE_TIMEOUT_S` seconds (default 30). A view can be bookmarked — the URL carries the source (`#/explore?kind=frame&project_id=…&node_id=…`). Live database sources follow in a later release.
+**Explore view** — the **Explore** button in the top bar opens a drag-and-drop explorer (Graphic Walker) inside SFS, over any node output from a flow run or any persisted table. Charts are compiled to SQL and run by DuckDB on the server, so a 30M-row frame answers in well under a second and only the aggregated result reaches the browser. **Show SQL** at the bottom lists every query with its timings. Guardrails: a view returns at most `EXPLORE_ROW_CAP` rows (default 50,000; a banner says when it was capped) and a query is stopped after `EXPLORE_TIMEOUT_S` seconds (default 30). A view can be bookmarked — the URL carries the source (`#/explore?kind=frame&project_id=…&node_id=…`).
+
+**Exploring a database directly** — under **Databases — live** in Explore, open any connection to browse its schemas and tables (with row estimates where the database keeps them), or choose **SQL query…** to explore the result of your own SELECT, written in that database's SQL. No flow is needed. Charts are compiled to the database's own dialect and run there, so only aggregates travel: on ClickHouse a chart over 3M rows typically answers in 10–200 ms. Guardrails for production databases:
+
+- the same row cap, plus a statement timeout enforced by the database itself where it supports one (PostgreSQL, Redshift, MySQL, ClickHouse, Snowflake, Trino); elsewhere SFS stops waiting after `EXPLORE_TIMEOUT_S`
+- a SQL source must be a single SELECT — anything else is refused before it reaches the database
+- date filters are sent as plain ranges on the column, so indexes and partition pruning still apply
+- **use read-only credentials for exploration connections.** A ClickHouse user with `readonly = 1` cannot change any setting, so its timeout falls back to SFS's own; `readonly = 2` keeps the user read-only and lets the server enforce it
+
+Median is exact on PostgreSQL, ClickHouse and DuckDB, approximate on Trino, and not offered on MySQL or SQL Server, which have no median aggregate. Dates are bucketed as stored (no time-zone shift); change *Display offset* in a chart's config if your timestamps are in UTC and you want local days.
 
 **Report node** — authored dashboard. Write Streamlit code (or have the AI draft it). Pre-injected: `st`, `df`, `pd`.
 
