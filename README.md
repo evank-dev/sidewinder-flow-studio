@@ -33,6 +33,11 @@ freely in the same flow.
 
 ---
 
+
+https://github.com/user-attachments/assets/11a44620-1510-41bd-a1fa-09b67ef59166
+
+
+---
 ## Features
 
 **Engines** (per node) — pandas · Polars (lazy/streaming) · DuckDB (SQL over Arrow) ·
