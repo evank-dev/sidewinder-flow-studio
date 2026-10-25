@@ -34,8 +34,7 @@ freely in the same flow.
 ---
 
 
-![Uploading sfs-nyc-taxi-flow.gif…]()
-
+<img width="1280" height="720" alt="sfs-nyc-taxi-flow" src="https://github.com/user-attachments/assets/6d7c05de-757c-4d8d-a816-cc1be153eb6b" />
 
 
 ---
