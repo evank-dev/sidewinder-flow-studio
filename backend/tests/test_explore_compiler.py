@@ -6,7 +6,13 @@ import pyarrow as pa
 import pytest
 
 from app.explore import compiler
-from app.explore.sources import _live_sql, gw_field
+from app.explore.live import live_sql
+from app.explore.sources import gw_field
+
+
+def _live_sql(compiled, table, dialect):
+    from app.explore.live import relation_sql
+    return live_sql(compiled, relation_sql("table", dialect, table=table), dialect, 50_000)
 
 AGG = {"workflow": [{"type": "view", "query": [{"op": "aggregate", "groupBy": ["gt"], "measures": [
     {"field": "x", "agg": "mean", "asFieldKey": "x_mean"}]}]}]}
@@ -57,8 +63,8 @@ def test_memory_does_not_grow_per_call():
 
 def test_live_sql_wraps_table_as_cte_clickhouse():
     sql = _live_sql(compiler.compile(AGG), "default.hhar", "clickhouse")
-    assert sql.startswith('WITH "sfs_src" AS (SELECT * FROM "default"."hhar")') or \
-        sql.startswith("WITH sfs_src AS (SELECT * FROM default.hhar)")
+    assert sql.startswith('WITH "sfs_src" AS (\nSELECT * FROM default.hhar\n)\n')
+    assert sql.endswith("AS sfs_capped LIMIT 50001")
 
 
 def test_clickhouse_median_is_exact():

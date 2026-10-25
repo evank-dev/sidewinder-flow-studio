@@ -389,7 +389,7 @@ export function ProcessorPanel({ nodeId }: { nodeId: string }) {
   })()
 
   return (
-    <div className="p-4 space-y-3 h-full flex flex-col">
+    <div className="p-4 space-y-3 min-h-full flex flex-col">
       <h3 className="text-xs font-semibold text-muted uppercase tracking-wider shrink-0">
         Processor
       </h3>
@@ -518,7 +518,7 @@ export function ProcessorPanel({ nodeId }: { nodeId: string }) {
         />
       )}
 
-      <div className="flex-1 flex flex-col min-h-0">
+      <div className="flex-1 flex flex-col min-h-[360px]">
         {inputVars.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap mb-1.5 shrink-0">
             <span className="text-xs text-muted">Inputs:</span>
@@ -547,11 +547,14 @@ export function ProcessorPanel({ nodeId }: { nodeId: string }) {
 
         {/* key includes engine so Monaco remounts with the right language
             when switching pandas ↔ duckdb. onKeyDown stopPropagation prevents
-            React Flow from intercepting Space/Delete while typing. */}
+            React Flow from intercepting Space/Delete while typing. The panel's
+            height follows its content, so a percentage height has nothing to
+            resolve against: Monaco is pinned to the box with absolute inset-0. */}
         <div
-          className="flex-1 rounded-lg overflow-hidden border border-canvas-border min-h-[320px]"
+          className="flex-1 relative rounded-lg overflow-hidden border border-canvas-border min-h-[320px]"
           onKeyDown={(e) => e.stopPropagation()}
         >
+          <div className="absolute inset-0">
           <Editor
             key={`${nodeId}-${engine}`}
             height="100%"
@@ -564,6 +567,7 @@ export function ProcessorPanel({ nodeId }: { nodeId: string }) {
             } as any}
             theme="vs-dark"
           />
+          </div>
         </div>
       </div>
 
