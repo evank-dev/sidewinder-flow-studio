@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Any
 
 from app.core.database import get_db
-from app.core.frame_cache import load_frame, get_frame_meta, clear_flow_cache
+from app.core.frame_cache import load_frame_head, get_frame_meta, clear_flow_cache
 from app.engine.executor import execute_flow
 from app.services.connection_service import list_connections, build_url, get_connect_args
 
@@ -148,11 +148,12 @@ def inspect_frame(project_id: str, node_id: str, limit: int = 500):
     if not meta:
         raise HTTPException(404, "No cached frame for this node")
     try:
-        df = load_frame(project_id, node_id)
+        # Only the rows shown: loading a whole 30M-row frame to show 500 is slow.
+        df = load_frame_head(project_id, node_id, limit)
     except FileNotFoundError:
         raise HTTPException(404, "Frame not found")
 
     import json
     schema = [{"name": c, "dtype": str(df[c].dtype)} for c in df.columns]
-    rows = json.loads(df.head(limit).to_json(orient="records", date_format="iso"))
-    return {"schema": schema, "rows": rows, "total": len(df), "meta": meta}
+    rows = json.loads(df.to_json(orient="records", date_format="iso"))
+    return {"schema": schema, "rows": rows, "total": meta["rows"], "meta": meta}

@@ -83,6 +83,24 @@ def frame_path(flow_id: str, node_id: str) -> str:
     return str(path)
 
 
+def load_frame_head(flow_id: str, node_id: str, limit: int) -> pd.DataFrame:
+    """First `limit` rows only — reads just the record batches needed."""
+    path = _cache_path(flow_id, node_id)
+    if not path.exists():
+        raise FileNotFoundError(f"No cached frame for node {node_id} in flow {flow_id}")
+    with pa.memory_map(str(path), "rb") as src:
+        reader = ipc.open_file(src)
+        batches, n = [], 0
+        for i in range(reader.num_record_batches):
+            if n >= limit:
+                break
+            b = reader.get_batch(i)
+            batches.append(b)
+            n += b.num_rows
+        table = pa.Table.from_batches(batches, schema=reader.schema)
+    return table.slice(0, limit).to_pandas()
+
+
 def clear_flow_cache(flow_id: str):
     """Remove all cached frames for a flow (e.g. on re-run from root)."""
     base = Path(settings.FRAME_CACHE_DIR) / flow_id
@@ -96,8 +114,10 @@ def get_frame_meta(flow_id: str, node_id: str) -> dict | None:
     path = _cache_path(flow_id, node_id)
     if not path.exists():
         return None
-    with ipc.open_file(str(path)) as reader:
-        schema = reader.schema_arrow
+    # Memory-mapped: counting rows touches batch headers, not the data.
+    with pa.memory_map(str(path), "rb") as src:
+        reader = ipc.open_file(src)
+        schema = reader.schema
         rows = sum(reader.get_batch(i).num_rows for i in range(reader.num_record_batches))
     return {
         "rows": rows,
