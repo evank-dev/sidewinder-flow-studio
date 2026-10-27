@@ -27,7 +27,7 @@ This guide walks through every capability with runnable examples.
 | **Profile** | Per-column statistics: nulls, distinct counts, top values, numeric stats, mini histogram. |
 | **Table View** | Renders the incoming frame as a table. |
 | **Chart View** | Renders a chart (ECharts / Plotly / matplotlib). |
-| **Explore** | Publishes the frame to the report viewer as a PyGWalker drag-and-drop explorer. |
+| **Explore** | Keeps the frame from each run and opens it in the Explore view (drag-and-drop charts). |
 | **Report** | Publishes an authored Streamlit dashboard to the report viewer. |
 
 ---
@@ -319,9 +319,7 @@ Toggle the active provider with one click; the AgentBox shows which provider gen
 
 ## Reports & Explore
 
-Publish data products viewable by people who never open SFS — the optional Streamlit viewer reads a shared DuckDB file.
-
-**Explore node** — no code. Set a report name, run the flow, open the link on the node. You get a PyGWalker drag-and-drop, Tableau-style explorer over the data.
+**Explore node** — no code. Connect it, run the flow, then click **Open in Explore** on the node (or in its panel). It opens the node's output from the last run in the Explore view below. Before v1.22 this node published a PyGWalker explorer to the report viewer; reports published that way still show in the viewer as a plain table.
 
 **Explore view** — the **Explore** button in the top bar opens a drag-and-drop explorer (Graphic Walker) inside SFS, over any node output from a flow run or any persisted table. Charts are compiled to SQL and run by DuckDB on the server, so a 30M-row frame answers in well under a second and only the aggregated result reaches the browser. **Show SQL** at the bottom lists every query with its timings. Guardrails: a view returns at most `EXPLORE_ROW_CAP` rows (default 50,000; a banner says when it was capped) and a query is stopped after `EXPLORE_TIMEOUT_S` seconds (default 30). A view can be bookmarked — the URL carries the source (`#/explore?kind=frame&project_id=…&node_id=…`).
 
@@ -343,7 +341,7 @@ From a node output or persisted table you get a **DuckDB** processor over `df` �
 
 **Drill-through** — on a node output or persisted table, **Drill** fetches the detail rows behind a chart point from a live table. Set it up once per source: pick the connection and detail table, and map the fields that identify a row (same-named text and date columns are suggested). The panel lists the chart's points; picking one runs `SELECT * FROM <detail> WHERE …` with that point's values and the chart's filters on the mapped columns, under the same guardrails, showing up to 1,000 rows. Fields without a mapping are listed as not applied — nothing is guessed. **Explore these rows** opens the detail query as a live SQL source.
 
-**Report node** — authored dashboard. Write Streamlit code (or have the AI draft it). Pre-injected: `st`, `df`, `pd`.
+**Report node** — a data product viewable by people who never open SFS: the optional Streamlit viewer reads a shared DuckDB file. Authored dashboard. Write Streamlit code (or have the AI draft it). Pre-injected: `st`, `df`, `pd`.
 
 ```python
 c1, c2, c3 = st.columns(3)
@@ -442,10 +440,10 @@ Both bulk steps run inside the warehouses; only the final count crosses into SFS
 [Persist: ON → local]  checkpoint the aggregate
         │
         ├─[Report node]   authored Streamlit KPI dashboard
-        └─[Explore node]  PyGWalker explorer for ad-hoc slicing
+        └─[Explore node]  ad-hoc slicing in the Explore view
 ```
 
-Runs every weekday at 06:00, retries twice with backoff on failure, alerts on final failure, and publishes both a curated dashboard and a self-serve explorer.
+Runs every weekday at 06:00, retries twice with backoff on failure, alerts on final failure, publishes a curated dashboard, and keeps the aggregate ready for ad-hoc slicing in Explore.
 
 ---
 

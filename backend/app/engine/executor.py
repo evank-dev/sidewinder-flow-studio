@@ -1527,16 +1527,34 @@ async def execute_flow(
                 })
                 return
 
-            # ── Explore / Report (publish to Streamlit viewer) ────────────────
-            elif node_type in ("explore_out", "report_out"):
+            # ── Explore (opened in the in-app Explore view) ────────────────────
+            # The node's cached frame is the Explore source; nothing is published.
+            elif node_type == "explore_out":
+                df_out   = df_in if df_in is not None else pd.DataFrame()
+                rows_out = store_frame(project_id, node_id, df_out)
+                duration_ms = round((time.perf_counter() - t0) * 1000)
+                await ws_manager.broadcast(flow_id, {
+                    "type": "explore_ready",
+                    "node_id": node_id, "label": label,
+                    "rows": rows_out, "duration_ms": duration_ms,
+                })
+                results.append({
+                    "node_id": node_id, "node_type": node_type,
+                    "status": "ok", "rows_in": rows_in, "rows_out": rows_out,
+                    "duration_ms": duration_ms,
+                })
+                return
+
+            # ── Report (publish to the Streamlit viewer) ──────────────────────
+            elif node_type == "report_out":
                 from app.core import report_store
                 df_out   = df_in if df_in is not None else pd.DataFrame()
                 rows_out = len(df_out)
                 store_frame(project_id, node_id, df_out)
 
-                kind = "explore" if node_type == "explore_out" else "dashboard"
+                kind = "dashboard"
                 report_name = data.get("report_name") or label
-                code = data.get("code", "") if kind == "dashboard" else ""
+                code = data.get("code", "")
 
                 tbl = report_store.publish_report(
                     report_name, pa.Table.from_pandas(df_out), kind, code

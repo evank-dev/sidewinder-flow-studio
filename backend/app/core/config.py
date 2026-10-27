@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     # Arrow IPC frame cache dir (node output frames stored here between runs)
     FRAME_CACHE_DIR: str = "./frame_cache"
 
-    # Reports (Explore/Report nodes) — DuckDB file shared with the Streamlit viewer
+    # Reports (Report nodes) — DuckDB file shared with the Streamlit viewer
     REPORTS_DIR: str = "./reports_data"
     # Persisted processor outputs (right-click → Persist)
     PERSIST_DB: str = "./reports_data/persist.duckdb"

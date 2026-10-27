@@ -80,7 +80,7 @@ These are the complete, genuinely useful free product. Nothing here is crippled.
   run where the data lives, over cached node outputs, persisted tables, and
   **live connections** (browse tables or explore a SELECT, before any flow
   exists); row cap, timeouts and read-only SQL guard included
-- ✅ Explore node (PyGWalker, no-code exploration) — to be repointed to the
+- ✅ Explore node (no code) — opens its output from the last run in the
   Explore view
 - ✅ Report node (Streamlit dashboards)
 - ✅ Streamlit reports viewer app

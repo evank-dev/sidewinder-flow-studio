@@ -1,6 +1,6 @@
 /**
- * ExploreNode & ReportNode — publish the incoming frame to the Streamlit
- * report viewer. Explore = PyGWalker drag-and-drop; Report = authored dashboard.
+ * ExploreNode & ReportNode. Explore caches the incoming frame and opens it in
+ * the in-app Explore view; Report publishes an authored Streamlit dashboard.
  */
 import { memo } from 'react'
 import { Handle, Position, type NodeProps } from 'reactflow'
@@ -34,7 +34,15 @@ function ReportishNode({
       </div>
       <div className="node-body">
         <div className="text-sm font-medium text-slate-200 truncate">{data.label}</div>
-        {state?.report_url ? (
+        {isExplore ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); openNodeInExplore(id) }}
+            className={`inline-flex items-center gap-1 text-xs mt-1 ${text} underline underline-offset-2 hover:brightness-125`}
+            title="Open this node's output from the last run in Explore"
+          >
+            Open in Explore <Compass size={10} />
+          </button>
+        ) : state?.report_url ? (
           <a
             href={state.report_url}
             target="_blank"
@@ -42,16 +50,22 @@ function ReportishNode({
             onClick={(e) => e.stopPropagation()}
             className={`inline-flex items-center gap-1 text-xs mt-1 ${text} underline underline-offset-2 hover:brightness-125`}
           >
-            Open {isExplore ? 'explorer' : 'dashboard'} <ExternalLink size={10} />
+            Open dashboard <ExternalLink size={10} />
           </a>
         ) : (
           <div className="text-xs text-muted italic">
-            Run flow to publish{data.report_name ? ` → ${data.report_name}` : ''}
+            Run flow to publish{(data as ReportData).report_name ? ` → ${(data as ReportData).report_name}` : ''}
           </div>
         )}
       </div>
     </div>
   )
+}
+
+/** Open an Explore node's cached frame (written on every run) in the Explore view. */
+export function openNodeInExplore(nodeId: string) {
+  const { activeProject, openExplore } = useStore.getState()
+  if (activeProject) openExplore({ kind: 'frame', project_id: activeProject.id, node_id: nodeId })
 }
 
 export const ExploreNode = memo((p: NodeProps<ExploreData>) => (

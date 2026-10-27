@@ -549,6 +549,18 @@ export const useStore = create<AppState>((set, get) => ({
           },
         }))
         break
+      case 'explore_ready' as any:
+        set((s) => ({
+          execState: {
+            ...s.execState,
+            [(event as any).node_id]: {
+              status: 'ok',
+              rows_in: (event as any).rows, rows_out: (event as any).rows,
+              duration_ms: (event as any).duration_ms,
+            },
+          },
+        }))
+        break
       case 'report_ready' as any:
         set((s) => ({
           execState: {

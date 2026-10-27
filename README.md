@@ -48,7 +48,7 @@ Snowflake, BigQuery, Redshift, ClickHouse, StarRocks, Doris, Trino, Databricks,
 Azure Data Lake, Delta Lake, Apache Iceberg
 
 **Nodes** — Trigger (manual/cron) · Processor · **Router** (conditional branching) ·
-Stop/Tap · Table View · Chart · Profile (column stats) · Explore (PyGWalker) ·
+Stop/Tap · Table View · Chart · Profile (column stats) · Explore ·
 Report (Streamlit) · Annotations · AI flow-design notes
 
 **Workflow** — multi-input joins/unions · persist & resume checkpoints ·

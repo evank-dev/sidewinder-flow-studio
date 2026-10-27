@@ -109,12 +109,12 @@ The Vite dev server proxies `/api` and `/ws` to `localhost:8000` automatically, 
 
 ### 3. Report viewer (terminal 3, optional)
 
-Only needed if you use **Explore** or **Report** nodes. Best practice is a *separate* environment, because the viewer pins specific Streamlit/PyGWalker versions that you don't want constraining your main env:
+Only needed if you use **Report** nodes. Best practice is a *separate* environment, because the viewer pins a specific Streamlit version that you don't want constraining your main env:
 
 ```bash
 conda create -n sfs-reports python=3.12 -y && conda activate sfs-reports
 cd reports-app
-pip install -r requirements.txt          # pinned streamlit==1.41.1 + pygwalker==0.5.0.1
+pip install -r requirements.txt          # pinned streamlit==1.41.1
 
 # Point it at the SAME reports DB the backend writes to:
 export REPORTS_DB=../backend/reports_data/reports.duckdb   # Windows: set REPORTS_DB=...
@@ -310,7 +310,7 @@ See [PLUGINS.md](PLUGINS.md) to write your own.
 3. Create a project, drop a **Trigger** and a **Processor**, connect them, put `df = pd.DataFrame({'x':[1,2,3]})` in the processor, and hit **Run Flow**.
 4. The processor should show `3 rows`. If so, you're good.
 
-For the reports viewer, add an **Explore** node after a processor, run, then open the link on the node (or browse to `:8501`).
+For the reports viewer, add a **Report** node after a processor, run, then open the link on the node (or browse to `:8501`).
 
 ---
 
@@ -319,7 +319,7 @@ For the reports viewer, add an **Explore** node after a processor, run, then ope
 | Symptom | Fix |
 |---|---|
 | Saved connection passwords stop working / `InvalidToken` in the logs | `SECRET_KEY` changed since they were saved. Restore the original key in `.env`, or edit each connection and re-enter its password. Other connections and flows keep working; only nodes using the affected connection fail. |
-| Report viewer: "PyGWalker not installed" | Restart the **viewer** terminal (packages installed after start aren't seen); ensure `streamlit==1.41.1` + `pygwalker==0.5.0.1` |
+| Report viewer: "No module named streamlit" or a dashboard fails to render | Restart the **viewer** terminal (packages installed after start aren't seen); ensure `streamlit==1.41.1` from `reports-app/requirements.txt` |
 | `IO Error ... file is being used by another process` (Windows) | Move data dirs out of OneDrive/Dropbox; the viewer now uses short-lived connections but synced folders still interfere |
 | Engine errors "sqlglot/ibis not installed" | `pip install -e ".[enterprise]"` |
 | Warehouse connection fails on Test | Check the driver extra is installed; for Snowflake verify the account-identifier format in the Host field |

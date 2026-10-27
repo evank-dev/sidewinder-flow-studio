@@ -66,7 +66,7 @@ def test_persist_is_attached_read_only(store):
 
 
 @pytest.mark.parametrize("kind,src,missing", [
-    ("frame", {"project_id": PID, "node_id": "nope"}, "No cached frame"),
+    ("frame", {"project_id": PID, "node_id": "nope"}, "has no output yet"),
     ("persist", {"table": "nope"}, "No persisted table 'nope'")])
 def test_missing_source(store, kind, src, missing):
     with pytest.raises(FileNotFoundError, match=missing):

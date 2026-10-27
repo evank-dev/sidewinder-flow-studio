@@ -68,8 +68,10 @@ def _cached_con(kind: str, project_id: str | None = None, node_id: str | None = 
     con = duckdb.connect()
     try:
         if kind == "frame":
-            from app.core.frame_cache import frame_path
+            from app.core.frame_cache import frame_path, has_frame
             from app.engine.executor import _duckdb_scan
+            if not has_frame(project_id, node_id):
+                raise FileNotFoundError("This node has no output yet. Run the flow, then open it again.")
             con.register(compiler.RELATION, _duckdb_scan(frame_path(project_id, node_id)))
         elif kind == "persist":
             from app.core.report_store import sanitize_table

@@ -40,7 +40,7 @@ const NODE_DEFAULTS: Record<string, object> = {
   stop:      { label: 'Stop', mode: 'hard' },
   table_out: { label: 'Table View' },
   chart_out: { label: 'Chart View', code: '' },
-  explore_out: { label: 'Explore', report_name: '' },
+  explore_out: { label: 'Explore' },
   report_out:  { label: 'Report', report_name: '', code: '' },
   annotation: { text: 'Note', color: 'slate', fontSize: 14 },
   profile_out: { label: 'Profile', top_n: 5, hist_bins: 10 },

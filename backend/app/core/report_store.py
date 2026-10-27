@@ -3,7 +3,7 @@ Report & persist store.
 
 Two DuckDB-file-backed facilities:
 
-1. REPORTS — Explore/Report nodes publish their input frame (plus optional
+1. REPORTS — Report nodes publish their input frame (plus optional
    Streamlit code) into reports.duckdb. The optional Streamlit viewer app
    mounts the same directory and reads it (single-writer / many-readers:
    the viewer connects read_only).

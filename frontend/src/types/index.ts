@@ -29,7 +29,6 @@ export interface ProcessorData {
 
 export interface ExploreData {
   label: string
-  report_name: string
 }
 
 export interface ReportData {

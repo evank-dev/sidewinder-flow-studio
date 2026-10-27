@@ -1,7 +1,7 @@
 """
 Sidewinder Flow Studio — Report Viewer
 
-Reads reports.duckdb (published by Explore/Report nodes) using SHORT-LIVED
+Reads reports.duckdb (published by Report nodes) using SHORT-LIVED
 read-only connections — open, query, close. Never holds the file open, so
 the SFS backend (the single writer) is never blocked. (DuckDB allows many
 read-only processes OR one writer — a held reader blocks the writer,
@@ -63,7 +63,7 @@ if meta.empty:
     st.sidebar.info("No reports published yet.")
     st.title("Sidewinder Flow Studio — Reports")
     st.markdown(
-        "Add an **Explore** or **Report** node to a flow and run it. "
+        "Add a **Report** node to a flow and run it. "
         "Published reports appear here automatically."
     )
     st.stop()
@@ -84,48 +84,16 @@ if st.sidebar.button("↻ Refresh data"):
     st.cache_data.clear()
     st.rerun()
 
-df = load_table(selected, float(row["updated_at"]))
-
 # ── Render ────────────────────────────────────────────────────────────────────
 if row["kind"] == "explore":
+    # Published by an Explore node before v1.22. Explore now runs inside SFS,
+    # so only a preview is loaded here — these tables can be tens of millions of rows.
     st.markdown(f"### 🔍 {selected}")
-    try:
-        from pygwalker.api.streamlit import StreamlitRenderer
-
-        @st.cache_resource(ttl=600)
-        def _renderer(name: str, updated_at: float):
-            # Renderer holds only the DataFrame (already loaded) — no DB handle
-            return StreamlitRenderer(load_table(name, updated_at), spec_io_mode="rw")
-
-        _renderer(selected, float(row["updated_at"])).explorer()
-    except Exception as pyg_err:
-        import sys, traceback
-        st.warning("PyGWalker could not load — showing raw data. Diagnostics below.")
-        with st.expander("🔧 PyGWalker diagnostics", expanded=True):
-            st.code(
-                f"python : {sys.executable}\n"
-                f"error  : {type(pyg_err).__name__}: {pyg_err}",
-                language="text",
-            )
-            try:
-                import pygwalker
-                st.code(
-                    f"pygwalker version : {getattr(pygwalker, '__version__', '?')}\n"
-                    f"pygwalker path    : {pygwalker.__file__}\n"
-                    "→ Installed, but pygwalker.api.streamlit failed — likely an old "
-                    "version (conda-forge lags). Fix: pip install -U pygwalker  (needs >= 0.4.7)",
-                    language="text",
-                )
-            except Exception:
-                st.code(
-                    "pygwalker: NOT importable in this python\n"
-                    "→ Either it isn't in this env, or streamlit was launched from another env.\n"
-                    "Fix: activate the env, then run with  python -m streamlit run app.py",
-                    language="text",
-                )
-            st.code(traceback.format_exc(), language="text")
-        st.dataframe(df, use_container_width=True)
+    st.info("Explore has moved into Sidewinder Flow Studio. Re-run the flow and use "
+            "**Open in Explore** on the Explore node. Below: the first 1,000 rows it last published.")
+    st.dataframe(_query(f'SELECT * FROM "{selected}" LIMIT 1000'), use_container_width=True)
 else:
+    df = load_table(selected, float(row["updated_at"]))
     st.markdown(f"### 📊 {selected}")
     code = row["code"] or ""
     if not code.strip():

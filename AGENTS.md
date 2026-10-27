@@ -59,7 +59,7 @@ trigger (manual/cron; enterprise scheduler fields: retries, retry_backoff_sec,
 alert_on_failure, alert_email, weekdays_only, skip_dates) · processor (code +
 engine + optional persist config) · stop (mode hard|tap) · table_out ·
 chart_out (set `result` to an echarts dict / plotly fig / matplotlib) ·
-router (conditional branching: branches[{label,expr}] + default_label; edge.sourceHandle is the branch label; untaken branches are blocked) · profile_out (auto per-column stats) · explore_out (PyGWalker) · report_out
+router (conditional branching: branches[{label,expr}] + default_label; edge.sourceHandle is the branch label; untaken branches are blocked) · profile_out (auto per-column stats) · explore_out (no code; caches its input as an Explore view source) · report_out
 (Streamlit code; `st`, `df`, `pd` injected) · annotation (text only; never
 executes) · ai_start / ai_step / ai_end (design-time specs compiled to
 processors by "Build with AI"; skipped at run time until built).

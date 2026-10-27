@@ -14,7 +14,8 @@ import { api } from '@/utils/api'
 import { EngineParams } from './EngineParams'
 import { AgentBox } from './AgentBox'
 import Editor from '@monaco-editor/react'
-import { RefreshCw, Save, BookmarkPlus } from 'lucide-react'
+import { RefreshCw, Save, BookmarkPlus, Compass } from 'lucide-react'
+import { openNodeInExplore } from '@/components/nodes/ReportNodes'
 
 const EDITOR_OPTS = {
   minimap: { enabled: false },
@@ -808,41 +809,37 @@ export function TableOutPanel({ nodeId }: { nodeId: string }) {
 }
 
 
-// ── Explore panel (PyGWalker) ─────────────────────────────────────────────────
+// ── Explore panel ─────────────────────────────────────────────────────────────
 
 export function ExplorePanel({ nodeId }: { nodeId: string }) {
   const { activeFlowId, updateNodeData } = useStore()
   const data = useNodeData(nodeId)
   const [label, setLabel] = useState(data.label ?? 'Explore')
-  const [name, setName] = useState(data.report_name ?? '')
 
   useEffect(() => {
     setLabel(data.label ?? 'Explore')
-    setName(data.report_name ?? '')
   }, [nodeId])
 
   const save = useCallback(() => {
     if (!activeFlowId) return
-    updateNodeData(activeFlowId, nodeId, { label, report_name: name })
-  }, [activeFlowId, nodeId, label, name, updateNodeData])
+    updateNodeData(activeFlowId, nodeId, { label })
+  }, [activeFlowId, nodeId, label, updateNodeData])
 
   return (
     <div className="p-4 space-y-4">
-      <h3 className="text-xs font-semibold text-muted uppercase tracking-wider">Explore (PyGWalker)</h3>
+      <h3 className="text-xs font-semibold text-muted uppercase tracking-wider">Explore</h3>
       <div>
         <label className="label">Label</label>
         <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} onBlur={save} />
-      </div>
-      <div>
-        <label className="label">Report name</label>
-        <input className="input font-mono" value={name} onChange={(e) => setName(e.target.value)} onBlur={save}
-          placeholder="e.g. salary_explore (defaults to label)" />
         <p className="text-xs text-muted mt-1">
-          Publishes the incoming DataFrame to the report viewer as a drag-and-drop
-          Tableau-style explorer. No code needed — run the flow, then open the link on the node.
+          Keeps the incoming DataFrame from each run and opens it in the Explore view:
+          drag-and-drop charts, computed on the server. No code needed — run the flow,
+          then open it here or from the link on the node.
         </p>
       </div>
-      <button className="btn-pri w-full" onClick={save}><Save size={12} /> Save</button>
+      <button className="btn-pri w-full" onClick={() => { save(); openNodeInExplore(nodeId) }}>
+        <Compass size={12} /> Open in Explore
+      </button>
     </div>
   )
 }
