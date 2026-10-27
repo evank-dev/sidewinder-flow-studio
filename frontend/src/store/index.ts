@@ -34,6 +34,20 @@ export function unregisterCanvasCallbacks() {
   _getNodes = null; _getEdges = null
 }
 
+/** Resolves once React Flow holds node `id`. Canvas updates are async, and
+ *  saveProject() reads nodes from the canvas, so saving straight after
+ *  addNodeToCanvas() would drop the new node. Resolves at once without a canvas. */
+export function waitForCanvasNode(id: string, timeoutMs = 2000): Promise<void> {
+  return new Promise((resolve) => {
+    const t0 = Date.now()
+    const check = () => {
+      if (!_getNodes || _getNodes().some((n) => n.id === id) || Date.now() - t0 > timeoutMs) resolve()
+      else setTimeout(check, 16)
+    }
+    check()
+  })
+}
+
 // Legacy — kept for compatibility, now uses the full callbacks
 export function registerCanvasNodeUpdater(fn: (nodeId: string, data: object) => void) {}
 export function unregisterCanvasNodeUpdater() {}

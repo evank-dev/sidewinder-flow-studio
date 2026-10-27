@@ -2,15 +2,17 @@
 // Charts are compiled to SQL by the backend (/api/explore/query) and run where
 // the data lives; only the small result reaches the browser.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { GraphicWalker, slateTheme } from '@kanaries/graphic-walker'
+import { GraphicWalker, chartToWorkflow, slateTheme } from '@kanaries/graphic-walker'
 import type { IDataQueryPayload, IMutField, IRow, IUIThemeConfig, VizSpecStore } from '@kanaries/graphic-walker'
 import Editor from '@monaco-editor/react'
 import {
-  ArrowLeft, Calendar, ChevronDown, ChevronRight, Code2, Database, Hash, Layers, Play, RefreshCw, Search, Server, Type,
+  ArrowLeft, Calendar, ChevronDown, ChevronRight, Code2, Database, Hash, Layers, ListTree, Play, Plus, RefreshCw,
+  Search, Server, Type,
 } from 'lucide-react'
 import { useStore } from '@/store'
 import { api } from '@/utils/api'
-import type { ExploreField, ExploreFrame, ExplorePersisted, ExploreSource, ExploreTable } from '@/types'
+import type { ExploreDrillConfig, ExploreField, ExploreFrame, ExplorePersisted, ExploreSource, ExploreTable } from '@/types'
+import { CreateNodeDialog, DrillPanel, DrillSettingsDialog } from './ExploreActions'
 import { isLive, sourceKey } from './source'
 
 interface QueryLog {
@@ -298,10 +300,33 @@ function SqlEditor({ connection, initial, onRun, onCancel }: {
 
 // ── Canvas + Show SQL ─────────────────────────────────────────────────────────
 
-function Walker({ source, fields, onEditSql }: { source: ExploreSource; fields: ExploreField[]; onEditSql: () => void }) {
+function Walker({ source, fields, onEditSql, onOpen }: {
+  source: ExploreSource; fields: ExploreField[]; onEditSql: () => void; onOpen: (s: ExploreSource) => void
+}) {
   const [log, setLog] = useState<QueryLog[]>([])
   const [showSql, setShowSql] = useState(false)
+  const [dialog, setDialog] = useState<'node' | 'drill-settings' | null>(null)
+  const [drillOpen, setDrillOpen] = useState(false)
+  const [drillConfig, setDrillConfig] = useState<ExploreDrillConfig | null>(null)
   const storeRef = useRef<VizSpecStore | null>(null)
+  const cached = !isLive(source)
+
+  useEffect(() => {
+    if (cached) api.explore.drillConfig(source).then((d) => setDrillConfig(d.config)).catch(() => {})
+  }, [source])
+
+  // The current chart as a query payload — what "Create node" and drilling use.
+  const chartPayload = () => (storeRef.current ? chartToWorkflow(storeRef.current.currentVis) : null)
+  const nameOf = (fid: string) =>
+    storeRef.current?.allFields.find((f) => f.fid === fid)?.name ?? fields.find((f) => f.fid === fid)?.name
+  // Chart results name measures "<field>_<aggregate>" (gw_count_fid_sum, fare_amount_mean).
+  const fieldName = (key: string) => {
+    const direct = nameOf(key)
+    if (direct) return direct
+    const m = key.match(/^(.*)_(sum|mean|median|count|min|max|variance|stdev|distinctCount)$/)
+    const base = m && nameOf(m[1])
+    return base ? `${base} (${m[2]})` : key
+  }
 
   useEffect(() => {
     window.__sfsExplore = { store: null, log: [], payloads: [] }
@@ -337,26 +362,45 @@ function Walker({ source, fields, onEditSql }: { source: ExploreSource; fields: 
   const dialect = log.find((q) => q.dialect)?.dialect
   return (
     <div className="flex flex-col flex-1 min-w-0 min-h-0">
-      {isLive(source) && (
-        <div className="px-4 py-1.5 text-xs border-b border-canvas-border bg-surface flex items-center gap-2 shrink-0"
-          data-testid="live-bar">
-          <Server size={12} className="text-amber-300" />
-          <span className="text-slate-300">
-            Live on <span className="text-amber-200">{source.connection}</span>{dialect ? ` · ${dialect}` : ''}
-            {source.kind === 'table' ? ` · ${source.table}` : ' · SQL query'}
+      <div className="px-4 py-1.5 text-xs border-b border-canvas-border bg-surface flex items-center gap-2 shrink-0"
+        data-testid="source-bar">
+        {isLive(source) ? (
+          <span className="flex items-center gap-2 min-w-0" data-testid="live-bar">
+            <Server size={12} className="text-amber-300 shrink-0" />
+            <span className="text-slate-300 truncate">
+              Live on <span className="text-amber-200">{source.connection}</span>{dialect ? ` · ${dialect}` : ''}
+              {source.kind === 'table' ? ` · ${source.table}` : ' · SQL query'}
+            </span>
+            <span className="text-muted hidden xl:inline whitespace-nowrap">— each chart change runs a query on this database</span>
           </span>
-          <span className="text-muted hidden lg:inline">— each chart change runs a query on this database</span>
+        ) : (
+          <span className="flex items-center gap-2 text-slate-300">
+            <Layers size={12} className="text-accent" /> Cached data · queried by DuckDB
+          </span>
+        )}
+        <span className="ml-auto flex items-center gap-1.5 shrink-0">
           {source.kind === 'sql' && (
-            <button className="btn-ghost text-xs py-0.5 ml-auto gap-1" onClick={onEditSql}><Code2 size={11} /> Edit SQL</button>
+            <button className="btn-ghost text-xs py-0.5 gap-1" onClick={onEditSql}><Code2 size={11} /> Edit SQL</button>
           )}
-        </div>
-      )}
+          {cached && (
+            <button className={`btn-ghost text-xs py-0.5 gap-1 ${drillOpen ? 'text-accent' : ''}`}
+              onClick={() => setDrillOpen((o) => !o)} title="Fetch the detail rows behind a chart point">
+              <ListTree size={11} /> Drill{drillConfig ? '' : '…'}
+            </button>
+          )}
+          <button className="btn-ghost text-xs py-0.5 gap-1 border border-canvas-border" onClick={() => setDialog('node')}
+            title="Add this view to the open flow as a processor node">
+            <Plus size={11} /> Create node
+          </button>
+        </span>
+      </div>
       {last?.truncated && (
         <div className="px-4 py-1.5 text-xs bg-amber-950/60 border-b border-amber-500/30 text-amber-200 shrink-0" role="status">
           Showing the first {fmt(last.row_cap)} rows of this view — add a filter or aggregate to see all of it.
         </div>
       )}
-      <div className="flex-1 overflow-auto min-h-0">
+      <div className="flex flex-1 min-h-0">
+      <div className="flex-1 overflow-auto min-h-0 min-w-0">
         <GraphicWalker
           fields={fields as unknown as IMutField[]}
           computation={computation}
@@ -370,6 +414,17 @@ function Walker({ source, fields, onEditSql }: { source: ExploreSource; fields: 
           toolbar={{ exclude: ['kanaries'] }}
         />
       </div>
+      {drillOpen && cached && (
+        <DrillPanel source={source} config={drillConfig} payload={chartPayload} fieldName={fieldName}
+          onSettings={() => setDialog('drill-settings')} onClose={() => setDrillOpen(false)}
+          onExploreRows={(connection, sql) => onOpen({ kind: 'sql', connection, sql })} />
+      )}
+      </div>
+      {dialog === 'node' && <CreateNodeDialog source={source} payload={chartPayload} onClose={() => setDialog(null)} />}
+      {dialog === 'drill-settings' && (
+        <DrillSettingsDialog source={source} fields={fields} initial={drillConfig}
+          onClose={() => setDialog(null)} onSaved={setDrillConfig} />
+      )}
       <div className="shrink-0 border-t border-canvas-border bg-surface">
         <button className="w-full flex items-center gap-2 px-3 py-1 text-[11px] text-muted hover:text-slate-300"
           onClick={() => setShowSql((v) => !v)} data-testid="sql-toggle">
@@ -466,7 +521,7 @@ export default function ExploreView() {
         <div className="flex-1 p-6 text-sm text-muted">{isLive(source) ? 'Reading the table from the database…' : 'Loading schema…'}</div>
       ) : (
         <Walker key={sourceKey(source)} source={source} fields={schema.fields}
-          onEditSql={() => isLive(source) && editSql(source.connection)} />
+          onEditSql={() => isLive(source) && editSql(source.connection)} onOpen={(s) => openExplore(s)} />
       )}
     </div>
   )

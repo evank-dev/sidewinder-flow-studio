@@ -128,17 +128,20 @@ def check_read_query(sql: str, dialect: str) -> str:
     return text
 
 
-def live_sql(compiled: str, relation: str, dialect: str, cap: int) -> str:
+def live_sql(compiled: str, relation: str, dialect: str, cap: int | None, pretty: bool = False) -> str:
     """WITH RELATION AS (<relation>) SELECT * FROM (<chart query>) LIMIT cap+1.
 
     The CTE stays at the top level (SQL Server does not allow WITH inside a
     derived table); the row cap wraps only the chart query, rendered per
-    dialect (LIMIT / TOP / FETCH FIRST).
+    dialect (LIMIT / TOP / FETCH FIRST). cap=None leaves the query uncapped
+    (generated flow nodes); pretty=True lays it out for people to read.
     """
     from sqlglot import exp
 
-    body = exp.select("*").from_(_body(compiled, dialect).subquery("sfs_capped")).limit(cap + 1)
-    out = body.sql(dialect=dialect)
+    body = _body(compiled, dialect)
+    if cap is not None:
+        body = exp.select("*").from_(body.subquery("sfs_capped")).limit(cap + 1)
+    out = body.sql(dialect=dialect, pretty=pretty)
     # Quoted like the chart query's references to it: Snowflake and Oracle
     # upper-case unquoted names, which would make the two differ.
     name = exp.to_identifier(compiler.RELATION, quoted=True).sql(dialect=dialect)

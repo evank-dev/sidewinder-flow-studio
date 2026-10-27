@@ -265,3 +265,9 @@ export interface ExploreQueryResult {
   compile_ms: number
   exec_ms: number
 }
+
+export interface ExploreDrillConfig {
+  connection: string
+  table: string
+  keys: { field: string; column: string }[]
+}

@@ -1,5 +1,5 @@
 import type { Project, Connection, Variable, AgentProvider, RunRow,
-  ExploreSource, ExploreFrame, ExplorePersisted, ExploreField, ExploreQueryResult, ExploreTable } from '@/types'
+  ExploreSource, ExploreFrame, ExplorePersisted, ExploreField, ExploreQueryResult, ExploreTable, ExploreDrillConfig } from '@/types'
 
 const BASE = '/api'
 
@@ -105,6 +105,18 @@ export const api = {
         `/explore/schema?${new URLSearchParams(source as Record<string, string>)}`),
     query: (source: ExploreSource, payload: object) =>
       req<ExploreQueryResult>('/explore/query', { method: 'POST', body: JSON.stringify({ source, payload }) }),
+    node: (source: ExploreSource, payload: object, mode: 'dataset' | 'chart', engine?: 'sql' | 'pandas') =>
+      req<{ node: { label: string; engine: string; code: string; target_connection?: string }; notes: string[] }>(
+        '/explore/node', { method: 'POST', body: JSON.stringify({ source, payload, mode, engine }) }),
+    drillConfig: (source: ExploreSource) =>
+      req<{ config: ExploreDrillConfig | null }>(`/explore/drill-config?${new URLSearchParams(source as Record<string, string>)}`),
+    saveDrillConfig: (source: ExploreSource, config: ExploreDrillConfig | null) =>
+      req<{ config: ExploreDrillConfig | null }>('/explore/drill-config',
+        { method: 'PUT', body: JSON.stringify({ source, config }) }),
+    drill: (source: ExploreSource, payload: object, row: Record<string, unknown>) =>
+      req<{ rows: Record<string, unknown>[]; truncated: boolean; sql: string; applied: string[];
+            unmapped: string[]; connection: string; dialect: string }>(
+        '/explore/drill', { method: 'POST', body: JSON.stringify({ source, payload, row }) }),
   },
 
   agent: {

@@ -334,6 +334,15 @@ Publish data products viewable by people who never open SFS — the optional Str
 
 Median is exact on PostgreSQL, ClickHouse and DuckDB, approximate on Trino, and not offered on MySQL or SQL Server, which have no median aggregate. Dates are bucketed as stored (no time-zone shift); change *Display offset* in a chart's config if your timestamps are in UTC and you want local days.
 
+**Explore → flow** — **Create node** (top right of the chart) adds what you built to the flow you have open, as an unconnected processor, saved:
+
+- *The data, with this chart's filters* (default) — every column of the source, filtered like the chart; the flow does its own shaping. Filters on computed fields (bins, date parts) belong to the chart and are left out, with a note
+- *This chart's result* — the aggregated rows the chart shows
+
+From a node output or persisted table you get a **DuckDB** processor over `df` — connect the source node to it. From a database you choose the engine: **pandas** (free) runs the query through `get_engine()` and brings the result into the flow; **SQL ⚡** (enterprise) runs it inside the database and returns only the result.
+
+**Drill-through** — on a node output or persisted table, **Drill** fetches the detail rows behind a chart point from a live table. Set it up once per source: pick the connection and detail table, and map the fields that identify a row (same-named text and date columns are suggested). The panel lists the chart's points; picking one runs `SELECT * FROM <detail> WHERE …` with that point's values and the chart's filters on the mapped columns, under the same guardrails, showing up to 1,000 rows. Fields without a mapping are listed as not applied — nothing is guessed. **Explore these rows** opens the detail query as a live SQL source.
+
 **Report node** — authored dashboard. Write Streamlit code (or have the AI draft it). Pre-injected: `st`, `df`, `pd`.
 
 ```python
