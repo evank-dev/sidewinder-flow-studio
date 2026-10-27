@@ -5,7 +5,7 @@
 import { useEffect, useRef } from 'react'
 import { X, GitBranch, Zap, Database, Sparkles } from 'lucide-react'
 
-export const SFS_VERSION = '1.21'
+export const SFS_VERSION = '1.22'
 
 export function AboutDialog({ onClose }: { onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null)

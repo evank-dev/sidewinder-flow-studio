@@ -1,6 +1,6 @@
 {
   "name": "flow-studio-frontend",
-  "version": "1.21",
+  "version": "1.22",
   "private": true,
   "type": "module",
   "scripts": {
