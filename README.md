@@ -69,7 +69,7 @@ libraries (PyCaret, scikit-learn…) never disturb the ETL environment
 **Docker (recommended):**
 
 ```bash
-git clone https://github.com/evank-dev/sidewinder-flow-studio.git
+git clone https://github.com/sidewinder-labs/sidewinder-flow-studio.git
 cd sidewinder-flow-studio
 cp .env.docker .env
 # generate a key and put it in .env as SECRET_KEY
