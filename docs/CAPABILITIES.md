@@ -82,7 +82,7 @@ GROUP BY 1
 ORDER BY 1
 ```
 
-### 4. SQL pushdown (enterprise)
+### 4. SQL pushdown
 
 The SQL executes **in the target warehouse**, not on your machine. Pick a target connection in the node. SFS transpiles dialects with SQLGlot, so you can write in one flavor and target another. `SELECT`/`WITH` results become the node output; DDL/DML commands (`CREATE TABLE AS`, `COPY INTO`, `LOAD DATA`, `MERGE`) execute without fetching — perfect for warehouse-to-warehouse orchestration.
 
@@ -96,7 +96,7 @@ WHERE s.to_date = DATE '9999-01-01' AND de.to_date = DATE '9999-01-01'
 GROUP BY d.dept_name
 ```
 
-### 5. Ibis (enterprise)
+### 5. Ibis
 
 Pandas-like Python that compiles to warehouse SQL and executes there. Injected: `ibis`, `con` (the target backend), and `df` (upstream frame as a memtable, if any). Leave the result expression in `df`.
 
@@ -147,7 +147,7 @@ processes all three at once.
 
 - Small/medium data, arbitrary Python, API calls → **pandas**
 - Larger single-machine volumes, speed → **Polars** or **DuckDB**
-- Data already in a warehouse; push the work down → **SQL** or **Ibis** (enterprise)
+- Data already in a warehouse; push the work down → **SQL** or **Ibis**
 
 ---
 
@@ -337,7 +337,7 @@ Median is exact on PostgreSQL, ClickHouse and DuckDB, approximate on Trino, and 
 - *The data, with this chart's filters* (default) — every column of the source, filtered like the chart; the flow does its own shaping. Filters on computed fields (bins, date parts) belong to the chart and are left out, with a note
 - *This chart's result* — the aggregated rows the chart shows
 
-From a node output or persisted table you get a **DuckDB** processor over `df` — connect the source node to it. From a database you choose the engine: **pandas** (free) runs the query through `get_engine()` and brings the result into the flow; **SQL ⚡** (enterprise) runs it inside the database and returns only the result.
+From a node output or persisted table you get a **DuckDB** processor over `df` — connect the source node to it. From a database you choose the engine: **pandas** runs the query through `get_engine()` and brings the result into the flow; **SQL ⚡** runs it inside the database and returns only the result.
 
 **Drill-through** — on a node output or persisted table, **Drill** fetches the detail rows behind a chart point from a live table. Set it up once per source: pick the connection and detail table, and map the fields that identify a row (same-named text and date columns are suggested). The panel lists the chart's points; picking one runs `SELECT * FROM <detail> WHERE …` with that point's values and the chart's filters on the mapped columns, under the same guardrails, showing up to 1,000 rows. Fields without a mapping are listed as not applied — nothing is guessed. **Explore these rows** opens the detail query as a live SQL source.
 
@@ -389,9 +389,7 @@ On the **Trigger** node, switch Run Mode to **Schedule** and set a cron expressi
 30 2 1 * *      # 02:30 on the 1st of each month
 ```
 
-**Free:** basic cron scheduling.
-
-**Enterprise scheduler** adds, on the same trigger node:
+**Advanced scheduling**, on the same trigger node:
 
 - **Retries** with **exponential backoff** (`wait × 2^(attempt−1)`)
 - **Failure alerting** — Slack webhook + email (configure `SLACK_WEBHOOK_URL` / `SMTP_*` in `.env`)

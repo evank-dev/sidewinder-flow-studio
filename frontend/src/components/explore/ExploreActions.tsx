@@ -114,9 +114,9 @@ export function CreateNodeDialog({ source, payload, onClose }: {
               <div className="label">Engine</div>
               <Choice value={engine} onChange={setEngine} options={[
                 { value: 'pandas', label: 'pandas — read into SFS',
-                  hint: `Runs the query on ${source.connection} and brings the result into the flow. Free.` },
+                  hint: `Runs the query on ${source.connection} and brings the result into the flow.` },
                 { value: 'sql', label: 'SQL ⚡ — push down to the warehouse',
-                  hint: `Runs inside ${source.connection}; only the result comes back. Enterprise engine.` },
+                  hint: `Runs inside ${source.connection}; only the result comes back.` },
               ]} />
             </div>
           ) : (

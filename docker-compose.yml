@@ -5,7 +5,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       args:
-        SFS_EXTRAS: "${SFS_EXTRAS-all-connectors,enterprise}"   # see .env.docker
+        SFS_EXTRAS: "${SFS_EXTRAS-all-connectors,pushdown}"   # see .env.docker
     container_name: flow-studio-backend
     restart: unless-stopped
     environment:

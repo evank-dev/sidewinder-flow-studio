@@ -45,17 +45,17 @@ editing node code, flows, or SFS source.
   Query result becomes the output. SFS fetches it with
   `app/core/duckdb_arrow.result_to_arrow`, which covers the DuckDB 1.x
   (`.arrow()`) and 2.x (`.to_arrow_table()`) APIs — use it, not those calls.
-- **sql** (enterprise, pushdown): SQL runs IN the target connection's warehouse
+- **sql** (pushdown): SQL runs IN the target connection's warehouse
   (SQLGlot transpiles dialects). SELECT/WITH results are fetched as the frame;
   DDL/DML (CREATE/COPY/LOAD/MERGE) execute without fetching. Upstream frame is
   NOT available in the warehouse.
-- **ibis** (enterprise, pushdown): Python; injected `ibis`, `con` (backend for
+- **ibis** (pushdown): Python; injected `ibis`, `con` (backend for
   target connection), upstream `df` as memtable. Leave an ibis expression in
   `df`; SFS executes it warehouse-side and pulls the result to pandas.
 
 ## Node types
 
-trigger (manual/cron; enterprise scheduler fields: retries, retry_backoff_sec,
+trigger (manual/cron; advanced scheduler fields: retries, retry_backoff_sec,
 alert_on_failure, alert_email, weekdays_only, skip_dates) · processor (code +
 engine + optional persist config) · stop (mode hard|tap) · table_out ·
 chart_out (set `result` to an echarts dict / plotly fig / matplotlib) ·
@@ -98,7 +98,7 @@ scheduler/ (APScheduler; retries/backoff/alerts/calendar) · services/.
 Conventions: lazy-import heavy deps (duckdb, polars, sqlglot, ibis, drivers)
 inside functions so the app starts without extras installed; optional drivers
 are pyproject extras (`pip install ".[clickhouse]"`, `.[all-connectors]`,
-`.[enterprise]`).
+`.[pushdown]`).
 
 ## Writing data — use `fast_write`, NOT `df.to_sql`
 

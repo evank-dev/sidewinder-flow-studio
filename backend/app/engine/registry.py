@@ -1,7 +1,7 @@
 """
 Engine registry + plugin loader.
 
-SFS execution engines (pandas, Polars, DuckDB, and any third-party/enterprise
+SFS execution engines (pandas, Polars, DuckDB, SQL, Ibis, and any third-party/enterprise
 engine) are described by an `EngineSpec` and registered here. The executor
 dispatches through this registry instead of a hard-coded if/elif chain, so new
 engines can be added by external packages without touching core code.

@@ -42,9 +42,9 @@ cd backend
 conda create -n sfs python=3.12 -y && conda activate sfs
 #   ...or:  python -m venv .venv && source .venv/bin/activate
 
-# Install the core plus any optional connector/enterprise extras you need
+# Install the core plus any optional connector/pushdown extras you need
 pip install -e .                         # core (pandas, polars, duckdb engines)
-pip install -e ".[enterprise]"           # + SQL pushdown & Ibis engines
+pip install -e ".[pushdown]"             # + SQL pushdown & Ibis engines
 pip install -e ".[snowflake,bigquery]"   # + specific warehouse drivers (see table below)
 ```
 
@@ -80,7 +80,7 @@ SFS_PARALLEL_BRANCHES=0
 SFS_DUCKDB_MEMORY_LIMIT=
 SFS_DUCKDB_TEMP_DIR=
 
-# Optional: enterprise scheduler failure alerts
+# Optional: scheduler failure alerts
 SLACK_WEBHOOK_URL=
 SMTP_HOST=
 SMTP_PORT=587
@@ -156,7 +156,7 @@ make docker-single          # same thing via Makefile
 make docker-single-down     # stop
 ```
 
-The image includes every warehouse driver and the enterprise engines by default. To change that, see [Choosing drivers for the Docker image](#choosing-drivers-for-the-docker-image).
+The image includes every warehouse driver and the pushdown engines by default. To change that, see [Choosing drivers for the Docker image](#choosing-drivers-for-the-docker-image).
 
 ---
 
@@ -212,7 +212,7 @@ REPORTS_PORT=8501      # report viewer port
 
 - All persistent data lives in the `flow_data` named volume. To use a host directory instead, uncomment the `driver_opts` bind block at the bottom of `docker-compose.yml` and point `device:` at your path.
 - The backend container reads env vars directly from the compose file (`PROJECTS_DIR=/data/...`, etc.) — you don't need a separate `backend/.env` in Docker mode.
-- The backend image is built with `SFS_EXTRAS=all-connectors,enterprise` by default — see [Choosing drivers for the Docker image](#choosing-drivers-for-the-docker-image).
+- The backend image is built with `SFS_EXTRAS=all-connectors,pushdown` by default — see [Choosing drivers for the Docker image](#choosing-drivers-for-the-docker-image).
 - To add AI or alerting in Docker, add the vars (`ANTHROPIC_API_KEY`, `SLACK_WEBHOOK_URL`, `SMTP_*`) to the `backend` service's `environment:` block.
 
 ---
@@ -231,7 +231,7 @@ pip install -e ".[oracle]"         # oracledb (thin mode; no Oracle client neede
 pip install -e ".[mysql]"          # pymysql
 pip install -e ".[druid]"          # pydruid
 pip install -e ".[adls]"           # adlfs (Azure Data Lake storage)
-pip install -e ".[enterprise]"     # sqlglot + ibis-framework (SQL & Ibis engines)
+pip install -e ".[pushdown]"       # sqlglot + ibis-framework (SQL & Ibis engines)
 pip install -e ".[all-connectors]" # everything above
 ```
 
@@ -239,10 +239,10 @@ PostgreSQL, MySQL, SQLite, and Druid basics work out of the box.
 
 ### Choosing drivers for the Docker image
 
-Both Docker setups install the backend with the pip extras named in the `SFS_EXTRAS` build argument. It defaults to `all-connectors,enterprise`, so every driver above and the SQL/Ibis engines are in the image. To build a smaller image, set it in `.env` before building:
+Both Docker setups install the backend with the pip extras named in the `SFS_EXTRAS` build argument. It defaults to `all-connectors,pushdown`, so every driver above and the SQL/Ibis engines are in the image. To build a smaller image, set it in `.env` before building:
 
 ```ini
-SFS_EXTRAS=trino,enterprise   # any extras from the list above, comma-separated
+SFS_EXTRAS=trino,pushdown     # any extras from the list above, comma-separated
 SFS_EXTRAS=                   # empty: core engines only (pandas, polars, duckdb)
 ```
 
@@ -321,6 +321,6 @@ For the reports viewer, add a **Report** node after a processor, run, then open 
 | Saved connection passwords stop working / `InvalidToken` in the logs | `SECRET_KEY` changed since they were saved. Restore the original key in `.env`, or edit each connection and re-enter its password. Other connections and flows keep working; only nodes using the affected connection fail. |
 | Report viewer: "No module named streamlit" or a dashboard fails to render | Restart the **viewer** terminal (packages installed after start aren't seen); ensure `streamlit==1.41.1` from `reports-app/requirements.txt` |
 | `IO Error ... file is being used by another process` (Windows) | Move data dirs out of OneDrive/Dropbox; the viewer now uses short-lived connections but synced folders still interfere |
-| Engine errors "sqlglot/ibis not installed" | `pip install -e ".[enterprise]"` |
+| Engine errors "sqlglot/ibis not installed" | `pip install -e ".[pushdown]"` (the older name `enterprise` still works) |
 | Warehouse connection fails on Test | Check the driver extra is installed; for Snowflake verify the account-identifier format in the Host field |
 | Frontend can't reach backend (local) | Confirm backend is on :8000; the Vite proxy targets that port |

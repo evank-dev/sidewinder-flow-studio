@@ -19,7 +19,7 @@ See [docs/INSTALLATION.md](docs/INSTALLATION.md) for the local three-terminal
 setup. In short:
 
 ```bash
-cd backend && pip install -e ".[all-connectors,enterprise,dev]" && python main.py
+cd backend && pip install -e ".[all-connectors,pushdown,dev]" && python main.py
 cd frontend && npm install && npm run dev
 ```
 

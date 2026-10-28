@@ -83,7 +83,7 @@ docker compose up --build -d
 
 ```bash
 # terminal 1 — backend
-cd backend && pip install -e ".[all-connectors,enterprise]" && python main.py
+cd backend && pip install -e ".[all-connectors,pushdown]" && python main.py
 
 # terminal 2 — frontend
 cd frontend && npm install && npm run dev
@@ -103,7 +103,7 @@ driver extras: **[docs/INSTALLATION.md](docs/INSTALLATION.md)**
 | [CAPABILITIES.md](docs/CAPABILITIES.md) | Every feature with runnable examples |
 | [PLUGINS.md](docs/PLUGINS.md) | Plugin contract for adding engines |
 | [AGENTS.md](AGENTS.md) | Context file for AI coding agents |
-| [EDITIONS.md](EDITIONS.md) | Open-core vs planned enterprise capabilities |
+| [EDITIONS.md](EDITIONS.md) | What is open core, and what the enterprise plugin will add |
 
 ---
 
@@ -175,11 +175,11 @@ Planned: auth/SSO and RBAC, worker-queue scaling, resume-from-failed-node, a
 semantic catalog exposed over MCP, and a desktop build.
 
 [EDITIONS.md](EDITIONS.md) maps every capability to its edition and implementation
-status. One thing it makes explicit and worth repeating here: features labelled
-"enterprise" (SQL/Ibis pushdown, the advanced scheduler) **currently ship in this
-open repository with no licence gate**. They work today. Nothing presently in the
-open repo will be removed from it retroactively; any future paid packaging would
-apply to new capabilities.
+status. Everything in this repository is open core, including the SQL and Ibis
+pushdown engines and the advanced scheduler (retries, alerts, calendar rules).
+Nothing here will be removed from it. Enterprise features — authentication and
+SSO, RBAC, multi-machine scaling, support — are new capabilities that will ship as
+a separately licensed plugin on top of this core.
 
 ---
 

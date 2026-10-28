@@ -9,7 +9,7 @@ and, by source:
     cached (frame / persist) → DuckDB processor over its input `df`
     live (table / sql)       → SQL ⚡ processor running in the connection,
                                or a pandas processor reading the same query
-                               through get_engine() (free; data comes into SFS)
+                               through get_engine() (data comes into SFS)
 """
 from __future__ import annotations
 

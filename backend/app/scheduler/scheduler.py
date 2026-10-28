@@ -1,5 +1,5 @@
 """
-APScheduler wrapper — enterprise-grade scheduled execution.
+APScheduler wrapper — scheduled execution.
 
 Per-flow (configured on the schedule trigger node):
   retries + exponential backoff · failure alerting (Slack/email) ·
@@ -28,7 +28,7 @@ def stop_scheduler():
 
 
 def _trigger_config(flow: dict) -> dict:
-    """Read enterprise schedule options from the flow's trigger node."""
+    """Read advanced schedule options from the flow's trigger node."""
     for n in flow.get("nodes", []):
         if n.get("type") == "trigger":
             d = n.get("data", {})

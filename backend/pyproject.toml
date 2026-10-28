@@ -59,7 +59,9 @@ doris      = ["pymysql>=1.1"]
 deltalake  = ["deltalake>=0.19"]
 iceberg    = ["pyiceberg>=0.7"]
 
-# ── Enterprise engines: SQL pushdown (SQLGlot) + Ibis ──
+# ── Pushdown engines: SQL (SQLGlot) + Ibis ──
+pushdown   = ["sqlglot>=25.0", "ibis-framework>=9.0"]
+# Former name of `pushdown`, kept so existing SFS_EXTRAS values keep working.
 enterprise = ["sqlglot>=25.0", "ibis-framework>=9.0"]
 
 # ── Everything at once ──

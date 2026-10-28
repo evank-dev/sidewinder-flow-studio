@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     # Base URL of the optional Streamlit report viewer (for "Open report" links)
     REPORTS_URL: str = "http://localhost:8501"
 
-    # Failure alerting (enterprise scheduler) — leave blank to disable a channel
+    # Failure alerting (scheduler) — leave blank to disable a channel
     SLACK_WEBHOOK_URL: str = ""
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587

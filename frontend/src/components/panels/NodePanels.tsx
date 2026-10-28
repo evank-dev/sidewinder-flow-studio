@@ -45,7 +45,7 @@ export function TriggerPanel({ nodeId }: { nodeId: string }) {
   const [mode,  setMode]  = useState(data.run_mode ?? 'manual')
   const [cron,  setCron]  = useState(data.cron ?? '')
   const [tz,    setTz]    = useState(data.timezone ?? 'UTC')
-  // Enterprise scheduler options
+  // Advanced scheduler options
   const [retries, setRetries]       = useState<number>(data.retries ?? 0)
   const [backoff, setBackoff]       = useState<number>(data.retry_backoff_sec ?? 60)
   const [alertOn, setAlertOn]       = useState<boolean>(data.alert_on_failure ?? false)
@@ -138,9 +138,9 @@ export function TriggerPanel({ nodeId }: { nodeId: string }) {
             />
           </div>
 
-          {/* ── Enterprise scheduler ─────────────────────────────── */}
+          {/* ── Advanced scheduler ───────────────────────────────── */}
           <div className="rounded-lg border border-amber-500/30 bg-amber-950/20 p-3 space-y-3">
-            <div className="text-xs text-amber-300 font-medium">⚡ Enterprise scheduling</div>
+            <div className="text-xs text-amber-300 font-medium">Advanced scheduling</div>
 
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -284,8 +284,8 @@ const FALLBACK_ENGINES = [
   { name: 'pandas', label: 'pandas', description: 'Python · full flexibility', tier: 'free', language: 'python', needs_target_connection: false, source: 'builtin', available: true },
   { name: 'polars', label: 'Polars', description: 'Lazy · streaming · fast', tier: 'free', language: 'python', needs_target_connection: false, source: 'builtin', available: true },
   { name: 'duckdb', label: 'DuckDB', description: 'SQL · zero-copy Arrow', tier: 'free', language: 'sql', needs_target_connection: false, source: 'builtin', available: true },
-  { name: 'sql', label: 'SQL ⚡', description: 'Pushdown · SQLGlot · warehouse', tier: 'enterprise', language: 'sql', needs_target_connection: true, source: 'builtin', available: true },
-  { name: 'ibis', label: 'Ibis ⚡', description: 'Pushdown · pandas-like · warehouse', tier: 'enterprise', language: 'python', needs_target_connection: true, source: 'builtin', available: true },
+  { name: 'sql', label: 'SQL ⚡', description: 'Pushdown · SQLGlot · warehouse', tier: 'free', language: 'sql', needs_target_connection: true, source: 'builtin', available: true },
+  { name: 'ibis', label: 'Ibis ⚡', description: 'Pushdown · pandas-like · warehouse', tier: 'free', language: 'python', needs_target_connection: true, source: 'builtin', available: true },
 ] as any[]
 
 let _capsCache: any[] | null = null
@@ -473,7 +473,7 @@ export function ProcessorPanel({ nodeId }: { nodeId: string }) {
 
       {engineSpec?.needs_target_connection && (
         <div className="shrink-0 space-y-2 rounded-lg border border-amber-500/30 bg-amber-950/20 p-2.5">
-          <div className="text-xs text-amber-300 font-medium">⚡ Enterprise pushdown — runs in the warehouse</div>
+          <div className="text-xs text-amber-300 font-medium">⚡ Pushdown — runs in the warehouse</div>
           <div>
             <label className="label">Target connection</label>
             <select className="input text-xs" value={targetConn} onChange={(e) => saveTarget(e.target.value)}>

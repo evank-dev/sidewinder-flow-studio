@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI):
             _P(_p).mkdir(parents=True, exist_ok=True)
         except Exception:
             pass
-    # Discover third-party/enterprise engine plugins (entry point group
+    # Discover third-party and enterprise plugins (entry point group
     # "sfs.plugins"). A failing plugin is logged and skipped, never fatal.
     try:
         from app.engine import executor as _executor  # registers builtin engines

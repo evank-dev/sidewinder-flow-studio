@@ -1035,13 +1035,13 @@ def _register_builtin_engines() -> None:
     register_engine(EngineSpec(
         name="sql", label="SQL ⚡", description="Pushdown · SQLGlot · warehouse",
         run=_run_sql, input_mode="none", output_mode="pandas",
-        language="sql", tier="enterprise", requires=("sqlglot",),
+        language="sql", tier="free", requires=("sqlglot",),
         needs_target_connection=True,
     ))
     register_engine(EngineSpec(
         name="ibis", label="Ibis ⚡", description="Pushdown · pandas-like · warehouse",
         run=_run_ibis, input_mode="pandas", output_mode="pandas",
-        language="python", tier="enterprise", requires=("ibis",),
+        language="python", tier="free", requires=("ibis",),
         needs_target_connection=True,
     ))
 
