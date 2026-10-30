@@ -5,7 +5,8 @@ the parameters with their uncertainties, without writing code. Built on
 [lmfit](https://lmfit.github.io/lmfit-py/).
 
 **Status: in development.** The **Curve fit** and **Evaluate model** engines
-work; the fit chart template, View as Python and examples are coming.
+and the **Fit with residuals** chart template work; View as Python and
+examples are coming.
 
 ## Install
 
@@ -31,7 +32,7 @@ y-error column, and a model:
 The output is one table with columns `kind, name, value, stderr, text`:
 a `parameter` row per fitted parameter, `statistic` rows (`chi2`, `redchi`,
 `r_squared`, `n_points`) and `model` rows (`expression`, `variable`, `preset`,
-`x_column`).
+`x_column`, `y_column`, `y_err_column`).
 
 - **Uncertainties:** with a y-error column, points are weighted by 1/σ and the
   parameter errors are absolute (not rescaled by the fit quality). Without one,
@@ -72,6 +73,19 @@ Turns parameters back into values. Connect a Curve fit node and leave Model on
 gives values only, no confidence band. Both need the parameter covariance
 matrix, which the parameter table doesn't carry. The Voigt model is evaluated
 by lmfit and supports no propagation.
+
+## Fit with residuals (chart template)
+
+In a Chart node, pick **Start from a template → Fit with residuals**. Connect
+the measurements, an Evaluate model node in Range mode (the curve) and,
+optionally, the Curve fit node. The chart shows the data with error bars, the
+fitted curve, a box with the model and parameters (value ± error, rounded to
+the error) and χ²/ν, and the residuals beneath.
+
+With the Curve fit connected, the x, y and y-error columns come from the fit
+and the residuals are exact; without it they are read off the curve. The
+settings at the top of the code (columns, title, axis labels) can be edited,
+and so can everything else: the code is yours once inserted.
 
 ## Adding a preset
 

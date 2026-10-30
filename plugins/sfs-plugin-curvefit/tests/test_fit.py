@@ -79,7 +79,7 @@ def test_table_schema_and_model_rows():
     assert tuple(table.columns) == TABLE_COLUMNS
     model = table[table.kind == "model"].set_index("name").text.to_dict()
     assert model == {"expression": "amplitude*exp(-x/decay)", "variable": "x", "preset": "exp_decay",
-                     "x_column": "x"}
+                     "x_column": "x", "y_column": "y", "y_err_column": ""}
     assert _stat(table, "n_points") == len(df)
     # Arrow needs one type per column: value and stderr stay numeric.
     import pyarrow as pa

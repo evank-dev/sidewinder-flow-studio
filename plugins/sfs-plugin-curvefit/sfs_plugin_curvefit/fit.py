@@ -3,7 +3,8 @@
 Output columns: kind, name, value, stderr, text.
     parameter  — one row per fitted parameter (value ± stderr)
     statistic  — chi2, redchi, r_squared, n_points
-    model      — expression, variable, preset, x_column (in `text`)
+    model      — expression, variable, preset, x_column, y_column,
+                 y_err_column (in `text`)
 
 Arrow needs one type per column, so `value` is always numeric and the model
 rows carry their strings in `text`. Downstream nodes find this table by its
@@ -246,6 +247,8 @@ def fit(df, *, x: str, y: str, y_err: str | None = None, model: str = "linear",
              ("model", "expression", np.nan, np.nan, spec.expression),
              ("model", "variable", np.nan, np.nan, spec.variable),
              ("model", "preset", np.nan, np.nan, spec.preset),
-             ("model", "x_column", np.nan, np.nan, str(x))]
+             ("model", "x_column", np.nan, np.nan, str(x)),
+             ("model", "y_column", np.nan, np.nan, str(y)),
+             ("model", "y_err_column", np.nan, np.nan, str(y_err or ""))]
     table = pd.DataFrame(rows, columns=list(TABLE_COLUMNS))
     return table, result

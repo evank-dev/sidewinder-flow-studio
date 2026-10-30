@@ -134,3 +134,29 @@ def test_evaluate_is_registered():
     assert eng["label"] == "Evaluate model" and eng["available"]
     model = next(p for p in eng["params"] if p["key"] == "model")
     assert model["default"] == "from_fit" and model["options"][0]["value"] == "from_fit"
+
+
+def test_fit_plot_in_a_flow(run_flow, monkeypatch):
+    """measurements → fit → evaluate(range) → Chart (Fit with residuals), with
+    the measurements and the fit also wired into the Chart."""
+    registry.load_plugins()
+    code = next(t["code"] for t in registry.list_templates("chart") if t["name"] == "Fit with residuals")
+    messages = []
+
+    async def broadcast(_flow_id, msg):
+        messages.append(msg)
+    monkeypatch.setattr(executor.ws_manager, "broadcast", broadcast)
+    flow = _chain({"mode": "range", "start": 0, "stop": 20, "points": 100})
+    flow["edges"] = [e for e in flow["edges"] if e["id"] != "e4"]
+    flow["nodes"].append({"id": "plot", "type": "chart_out", "data": {"label": "Fit plot", "code": code}})
+    flow["edges"] += [{"id": f"p{i}", "source": s, "target": "plot"} for i, s in enumerate(("data", "fit", "ev"))]
+    results = {r["node_id"]: r for r in asyncio.run(executor.execute_flow("proj1", flow, {}, {}))}
+    assert results["plot"]["status"] == "ok", results["plot"].get("detail")
+    chart = next(m for m in messages if m.get("type") == "chart_ready")
+    assert chart["chart_type"] == "png" and len(chart["payload"]) > 10_000
+
+
+def test_template_is_registered():
+    registry.load_plugins()
+    t = next(t for t in registry.list_templates("chart") if t["name"] == "Fit with residuals")
+    assert t["source"] == "plugin:curvefit" and "is_parameter_table" in t["code"]

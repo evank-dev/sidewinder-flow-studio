@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pandas>=2.2"]
+dev = ["pytest>=8.0", "pandas>=2.2", "matplotlib>=3.8"]
 
 # SFS discovers the plugin through this entry point.
 [project.entry-points."sfs.plugins"]
