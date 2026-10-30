@@ -102,6 +102,7 @@ driver extras: **[docs/INSTALLATION.md](docs/INSTALLATION.md)**
 | [INSTALLATION.md](docs/INSTALLATION.md) | Local, single-container, and multi-container setup |
 | [CAPABILITIES.md](docs/CAPABILITIES.md) | Every feature with runnable examples |
 | [PLUGINS.md](docs/PLUGINS.md) | Plugin contract for adding engines |
+| [CURVE_FITTING.md](docs/CURVE_FITTING.md) | Fit models to measurements: parameters ± errors, fit plots, View as Python |
 | [AGENTS.md](AGENTS.md) | Context file for AI coding agents |
 | [EDITIONS.md](EDITIONS.md) | What is open core, and what the enterprise plugin will add |
 

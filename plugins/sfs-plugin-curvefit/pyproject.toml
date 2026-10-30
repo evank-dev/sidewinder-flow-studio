@@ -23,6 +23,9 @@ dev = ["pytest>=8.0", "pandas>=2.2", "matplotlib>=3.8"]
 [project.entry-points."sfs.plugins"]
 curvefit = "sfs_plugin_curvefit.plugin:register"
 
+[tool.setuptools.package-data]
+"sfs_plugin_curvefit.examples" = ["*.csv"]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["sfs_plugin_curvefit*"]

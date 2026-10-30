@@ -1,5 +1,5 @@
 """SFS plugin: curve fitting (lmfit) — registers `curvefit_fit`, `curvefit_eval`
-and the "Fit with residuals" chart template.
+the "Fit with residuals" chart template and example flows.
 
 Engine names are saved into every flow that uses them: never rename them.
 Heavy libraries (lmfit, sympy, numpy) are imported inside `run`, so SFS starts
@@ -150,6 +150,14 @@ def _register_templates(api):
         code=templates.read("fit_with_residuals"))
 
 
+def _register_examples(api):
+    if not hasattr(api, "register_example"):
+        return
+    from .examples import EXAMPLES
+    for name, description, flow in EXAMPLES:
+        api.register_example(name=name, description=description, flow=flow)
+
+
 def register(api):
     api.register_engine(api.EngineSpec(
         name="curvefit_fit",                 # permanent id — do not rename
@@ -166,6 +174,7 @@ def register(api):
         **_to_code(api, "fit_code"),
     ))
     _register_templates(api)
+    _register_examples(api)
     api.register_engine(api.EngineSpec(
         name="curvefit_eval",                # permanent id — do not rename
         label="Evaluate model",

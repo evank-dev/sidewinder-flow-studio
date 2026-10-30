@@ -4,9 +4,10 @@ Curve fitting for Sidewinder Flow Studio: load measurements, fit a model, get
 the parameters with their uncertainties, without writing code. Built on
 [lmfit](https://lmfit.github.io/lmfit-py/).
 
-**Status: in development.** The **Curve fit** and **Evaluate model** engines,
-the **Fit with residuals** chart template and **View as Python** work; examples
-are coming.
+Two engines (**Curve fit**, **Evaluate model**), a **Fit with residuals** chart
+template, **View as Python**, and example projects (radioactive decay, enzyme
+kinetics). The user guide is [docs/CURVE_FITTING.md](../../docs/CURVE_FITTING.md);
+this file is for developers.
 
 ## Install
 
@@ -100,6 +101,14 @@ are shown as the formulas the engine evaluates.
 Evaluate's code reads the fitted parameters from the connected Curve fit table
 at run time, but takes the model from the fit's last result, so run the flow
 once before viewing it.
+
+## Examples
+
+`sfs_plugin_curvefit/examples/` holds the sample data (CSV, shipped as package
+data) and the example flows, registered with `api.register_example`. The decay
+counts are real classroom data; `tests/test_examples.py` runs every example
+through the executor and checks the decay fit against `scipy.optimize.curve_fit`
+(t½ = 26.4 ± 0.6).
 
 ## Adding a preset
 

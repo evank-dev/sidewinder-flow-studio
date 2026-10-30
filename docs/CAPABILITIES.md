@@ -122,6 +122,11 @@ packages with aggressive version pins can be used without destabilising the ETL
 environment. `plugins/sfs-plugin-sklearn` ships both an in-process and an
 isolated variant of the same engine as a reference.
 
+Plugins can also offer chart templates, example projects (**Start from an
+example** in the project picker) and **View as Python** for their form-driven
+engines. `plugins/sfs-plugin-curvefit`, included in the Docker images, uses all
+of them: see [CURVE_FITTING.md](CURVE_FITTING.md).
+
 ### Memory behaviour
 
 | Engine | Data larger than RAM? |
