@@ -12,6 +12,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useStore } from '@/store'
 import { api } from '@/utils/api'
 import { EngineParams } from './EngineParams'
+import { ViewAsPython } from './ViewAsPython'
 import { AgentBox } from './AgentBox'
 import Editor from '@monaco-editor/react'
 import { RefreshCw, Save, BookmarkPlus, Compass } from 'lucide-react'
@@ -519,6 +520,21 @@ export function ProcessorPanel({ nodeId }: { nodeId: string }) {
         />
       )}
 
+      {engineSpec?.has_to_code && (
+        <ViewAsPython
+          engine={engine}
+          engineLabel={engineSpec.label}
+          data={data}
+          projectId={activeProject?.id}
+          parentIds={((flow?.edges as any[]) ?? []).filter((e) => e.target === nodeId).map((e) => e.source)}
+          onConvert={(generated) => {
+            setCode(generated)
+            setEngine('pandas')
+            if (activeFlowId) updateNodeData(activeFlowId, nodeId, { label, code: generated, engine: 'pandas' })
+          }}
+        />
+      )}
+
       <div className="flex-1 flex flex-col min-h-[360px]">
         {inputVars.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap mb-1.5 shrink-0">
@@ -535,7 +551,8 @@ export function ProcessorPanel({ nodeId }: { nodeId: string }) {
         )}
         <div className="flex items-center justify-between mb-1 shrink-0">
           <label className="label mb-0">
-            {engine === 'sql' ? 'SQL' : engine === 'ibis' ? 'Ibis (Python)' : engine === 'duckdb' ? 'SQL (DuckDB)' : 'Python Code'}
+            {engine === 'sql' ? 'SQL' : engine === 'ibis' ? 'Ibis (Python)' : engine === 'duckdb' ? 'SQL (DuckDB)'
+              : engineSpec?.params?.length ? 'Python Code (optional — runs instead of the form)' : 'Python Code'}
           </label>
           <button
             className="btn-ghost text-xs py-0.5"
@@ -564,7 +581,8 @@ export function ProcessorPanel({ nodeId }: { nodeId: string }) {
             onChange={(v) => setCode(v ?? '')}
             options={{
               ...EDITOR_OPTS,
-              placeholder: engine === 'duckdb' ? DUCKDB_HINT : engine === 'polars' ? POLARS_HINT : engine === 'sql' ? SQL_HINT : engine === 'ibis' ? IBIS_HINT : PROCESSOR_HINT,
+              placeholder: engine === 'duckdb' ? DUCKDB_HINT : engine === 'polars' ? POLARS_HINT : engine === 'sql' ? SQL_HINT : engine === 'ibis' ? IBIS_HINT
+                : (engineSpec?.source?.startsWith('plugin:') && engineSpec?.hint) || PROCESSOR_HINT,
             } as any}
             theme="vs-dark"
           />

@@ -78,6 +78,12 @@ class EngineSpec:
     # Each entry: {key, label, type, default?, required?, options?, help?}
     # type ∈ string | number | boolean | select | column | connection
     params: tuple[dict, ...] = ()
+    # Optional "View as Python": to_code(params, inputs) -> str returns plain
+    # pandas-node code doing the same work as the form. `params` are the
+    # resolved declared params; `inputs` the upstream frames from the last run
+    # (pandas, possibly empty). Raise ValueError with a message the user can act
+    # on when code can't be generated yet.
+    to_code: Callable[[dict, list], str] | None = None
     source: str = "builtin"                 # "builtin" or "plugin:<dist>"
 
     def resolve_params(self, node_data: dict) -> dict:
@@ -183,6 +189,7 @@ def list_engines() -> list[dict]:
             "needs_target_connection": spec.needs_target_connection,
             "params": list(spec.params),
             "hint": spec.hint,
+            "has_to_code": spec.to_code is not None,
             "source": spec.source,
             "available": ok,
             "unavailable_reason": reason,

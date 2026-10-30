@@ -4,6 +4,7 @@ import { Code2, ChevronRight, ArrowRight } from 'lucide-react'
 import { useStore } from '@/store'
 import type { ProcessorData } from '@/types'
 import { StatusIcon, RowPill, DurationBadge } from '@/components/ui/NodeStatus'
+import { useEngines, paramSummary } from '@/utils/engines'
 
 export const ProcessorNode = memo(({ id, data, selected }: NodeProps<ProcessorData>) => {
   const { execState, setSelectedNode } = useStore()
@@ -13,6 +14,10 @@ export const ProcessorNode = memo(({ id, data, selected }: NodeProps<ProcessorDa
   const isPolars = nodeEngine === 'polars'
   const isSql = nodeEngine === 'sql'
   const isIbis = nodeEngine === 'ibis'
+  // Plugin engines: show which one, and (for form-driven ones) their settings
+  const engines = useEngines()
+  const pluginEngine = engines.find((e) => e.name === nodeEngine && e.source?.startsWith('plugin:'))
+  const summary = paramSummary(pluginEngine, data as any)
   const firstLine = data.code?.split('\n').find((l) => {
     const t = l.trim()
     return t && !t.startsWith('#') && !t.startsWith('--')
@@ -47,6 +52,12 @@ export const ProcessorNode = memo(({ id, data, selected }: NodeProps<ProcessorDa
           <span className="text-xs font-mono bg-amber-500/15 text-amber-300 rounded px-1 py-px leading-none"
                 title="Ibis pushdown — runs in the warehouse">⚡ ibis</span>
         )}
+        {pluginEngine && (
+          <span className="text-xs font-mono bg-violet-500/15 text-violet-300 rounded px-1 py-px leading-none truncate max-w-[9rem]"
+                title={`${pluginEngine.label} — ${pluginEngine.description} (from ${pluginEngine.source})`}>
+            🧩 {pluginEngine.label}
+          </span>
+        )}
         <span className="ml-auto"><StatusIcon status={state?.status ?? 'idle'} /></span>
       </div>
 
@@ -57,6 +68,8 @@ export const ProcessorNode = memo(({ id, data, selected }: NodeProps<ProcessorDa
           <div className="font-mono text-xs text-emerald-300/70 bg-canvas-bg/60 border border-canvas-border rounded px-2 py-1 truncate">
             {firstLine.slice(0, 55)}{firstLine.length > 55 ? '…' : ''}
           </div>
+        ) : summary ? (
+          <div className="text-xs text-slate-400 line-clamp-2 break-words" title={summary}>{summary}</div>
         ) : (
           <div className="text-xs text-muted italic">No code — click to edit</div>
         )}
@@ -76,7 +89,7 @@ export const ProcessorNode = memo(({ id, data, selected }: NodeProps<ProcessorDa
       </div>
 
       <div className="node-footer border-node-processorBorder/30" onClick={() => setSelectedNode(id)}>
-        <ChevronRight size={10} /> Edit Code
+        <ChevronRight size={10} /> {summary && !firstLine ? 'Edit' : 'Edit Code'}
       </div>
 
       <Handle type="target" position={Position.Left}  id="in" />

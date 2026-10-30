@@ -84,6 +84,9 @@ export const api = {
     features: Record<string, boolean>
   }>('/capabilities/'),
 
+  toCode: (body: { engine: string; node_data: object; project_id?: string; parent_ids: string[] }) =>
+    req<{ code: string }>('/capabilities/to-code', { method: 'POST', body: JSON.stringify(body) }),
+
   buildFlow: (flow_state: object) =>
     req<{ nodes: { node_id: string; label: string; code: string }[]; errors: any[] }>(
       '/agent/build-flow', { method: 'POST', body: JSON.stringify({ flow_state }) }),

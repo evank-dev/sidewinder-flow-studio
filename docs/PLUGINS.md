@@ -88,7 +88,9 @@ prevent SFS from starting.
 | `tier` | str | `free` or `enterprise` (informational/UI). |
 | `requires` | tuple[str] | Importable module names. If missing, the engine shows as unavailable instead of erroring at run time. |
 | `needs_target_connection` | bool | If true, the UI shows a connection picker and `target_url`/`target_dialect` are populated. |
-| `hint` | str | Optional placeholder/help text. |
+| `hint` | str | Optional placeholder/help text. For a plugin engine it is the code editor's placeholder. |
+| `params` | tuple[dict] | Optional form fields (see *Declaring parameters*). |
+| `to_code` | callable | Optional *View as Python*: `to_code(params, inputs) -> str` (see below). |
 
 ### `input_mode` — what SFS prepares for you
 
@@ -262,6 +264,31 @@ to a shared volume as Arrow/parquet, invoke the runtime, read the result back.
 The core process never imports the heavy library.
 
 ---
+
+## View as Python (optional)
+
+A form-driven engine can show its work as ordinary code. Give the `EngineSpec`
+a `to_code(params, inputs) -> str` and the processor panel gains two buttons:
+
+- **View as Python** — the code, read-only, with a Copy button
+- **Convert to code node** — switches the node to the pandas engine with that
+  code in its cell (after asking); the form values stay in the node data but
+  are no longer used
+
+`params` are the node's declared params with defaults applied, exactly as
+`run` receives them in `ec.params`. `inputs` are the upstream frames from the
+last run (pandas DataFrames, in no guaranteed order, possibly empty if the flow
+hasn't run): use them only when the code depends on what arrives, and raise
+`ValueError` with a message the user can act on ("Run the flow once first…")
+when it can't be generated yet.
+
+The code runs in a pandas node, so it gets `df`, `df2`, …, `dfs` and `pd`, and
+must leave its result in `df`. Make it produce **the same frame as the engine**
+and test that by executing it next to `run` on the same inputs; the simplest
+way to keep them from drifting apart is for the engine to execute or share the
+very source text it shows. The node card and panel find out through
+`has_to_code` in `/api/capabilities`. Endpoint: `POST /api/capabilities/to-code`
+with `{engine, node_data, project_id, parent_ids}`.
 
 ## Templates (optional)
 
