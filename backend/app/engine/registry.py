@@ -16,6 +16,7 @@ The referenced callable is invoked at startup with the public registry API:
 
     def register(api):
         api.register_engine(EngineSpec(name="my_engine", ..., run=my_run))
+        api.register_template(kind="chart", name="My plot", code="...")
 
 See docs/PLUGINS.md for the full contract.
 """
@@ -143,6 +144,31 @@ def get_engine_spec(name: str | None) -> EngineSpec:
     return spec
 
 
+# ── Templates ─────────────────────────────────────────────────────────────────
+# Starting code a plugin offers for a node type. The node panel lists them in a
+# dropdown; picking one copies the code into the editor, where the user owns it
+# (nothing stays linked to the plugin).
+
+TEMPLATE_KINDS = ("chart",)
+TEMPLATES: list[dict] = []
+
+
+def register_template(*, kind: str, name: str, code: str, description: str = "",
+                      source: str = "builtin") -> None:
+    if kind not in TEMPLATE_KINDS:
+        raise ValueError(f"Unknown template kind '{kind}'; supported: {', '.join(TEMPLATE_KINDS)}")
+    if any(t["kind"] == kind and t["name"] == name for t in TEMPLATES):
+        log.warning("Template '%s' (%s) already registered — ignoring duplicate", name, kind)
+        return
+    TEMPLATES.append({"kind": kind, "name": name, "code": code,
+                      "description": description, "source": source})
+    log.info("Registered %s template '%s' (%s)", kind, name, source)
+
+
+def list_templates(kind: str | None = None) -> list[dict]:
+    return [dict(t) for t in TEMPLATES if kind is None or t["kind"] == kind]
+
+
 def list_engines() -> list[dict]:
     """Serializable engine list for /api/capabilities."""
     out = []
@@ -190,6 +216,11 @@ class RegistryAPI:
     def register_engine(self, spec: EngineSpec, *, override: bool = False) -> None:
         spec.source = self._source
         register_engine(spec, override=override)
+
+    def register_template(self, *, kind: str, name: str, code: str, description: str = "") -> None:
+        """Offer starting code for a node type (today: kind="chart")."""
+        register_template(kind=kind, name=name, code=code, description=description,
+                          source=self._source)
 
 
 def load_plugins() -> list[dict]:

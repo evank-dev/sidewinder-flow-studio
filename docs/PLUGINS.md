@@ -263,10 +263,39 @@ The core process never imports the heavy library.
 
 ---
 
+## Templates (optional)
+
+A plugin can offer starting code for a node type. Today the only kind is
+`chart`: the Chart node panel lists every registered chart template in a
+**Start from a template** dropdown, and picking one copies its code into the
+editor (asking first if there is code already). The copy belongs to the user;
+nothing stays linked to the plugin, so later plugin updates don't change
+existing charts.
+
+```python
+def register(api):
+    api.register_template(
+        kind="chart",
+        name="Fit with residuals",          # shown in the dropdown; unique per kind
+        description="Data, fitted curve and residuals",   # tooltip
+        code=TEMPLATE_CODE,                 # ordinary Chart node code
+    )
+```
+
+The code runs like any Chart node code: `df`, `df2`, … and `dfs` hold the
+inputs, and it sets `result` or draws with matplotlib. Inputs arrive ordered by
+parent node id, which users don't control, so a template that takes several
+inputs should identify each by its columns. Keep templates as `.py` files in
+your package (read them with `importlib.resources`) so they can be linted and
+tested. An unknown `kind` raises `ValueError`; a duplicate name is ignored
+with a warning. Guard the call with `hasattr(api, "register_template")` if
+your plugin also supports older SFS versions.
+
 ## Discovering what's installed
 
 `GET /api/capabilities` returns registered engines (with `source`, `tier` and
-availability) and the load status of every discovered plugin. The frontend
+availability), registered templates, and the load status of every discovered
+plugin. The frontend
 renders the engine picker from this, so a newly installed plugin appears in the
 UI with no frontend change. Engines whose `requires` are missing appear greyed
 out with the reason.

@@ -80,6 +80,7 @@ export const api = {
                language: string; needs_target_connection: boolean; source: string;
                available: boolean; unavailable_reason?: string }[]
     plugins: { name: string; loaded: boolean; error?: string }[]
+    templates?: { kind: string; name: string; code: string; description: string; source: string }[]
     features: Record<string, boolean>
   }>('/capabilities/'),
 

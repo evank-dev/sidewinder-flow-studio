@@ -526,12 +526,17 @@ def df_to_table_payload(df: pd.DataFrame, max_rows: int = 500) -> dict:
 
 # ── Chart rendering ───────────────────────────────────────────────────────────
 
-def render_chart(df: pd.DataFrame, code: str, ctx: dict) -> dict:
+def render_chart(df: pd.DataFrame, code: str, ctx: dict,
+                 df_extra: list[pd.DataFrame] | None = None) -> dict:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    # Several inputs, as for processors: first parent → df, others → df2, df3, …
     local: dict[str, Any] = {**ctx, "df": df.copy(), "result": None}
+    for i, extra in enumerate(df_extra or [], start=2):
+        local[f"df{i}"] = extra.copy()
+    local["dfs"] = [local["df"]] + [local[f"df{i}"] for i in range(2, 2 + len(df_extra or []))]
     exec(code, local)  # noqa: S102
 
     result = local.get("result")
@@ -1512,7 +1517,7 @@ async def execute_flow(
                 df_out   = df_in if df_in is not None else pd.DataFrame()
                 rows_out = len(df_out)
                 code     = data.get("code", "")
-                chart_result = render_chart(df_out, code, ctx)
+                chart_result = render_chart(df_out, code, ctx, df_extra)
                 duration_ms  = round((time.perf_counter() - t0) * 1000)
                 await ws_manager.broadcast(flow_id, {
                     "type": "chart_ready",

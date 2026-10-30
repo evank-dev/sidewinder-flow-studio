@@ -13,8 +13,10 @@ editing node code, flows, or SFS source.
 - **Only the variable `df` passes downstream.** Any other DataFrame created in
   a node (`df1`, `tmp`, …) is discarded when the node finishes. To transform
   the output, REASSIGN df: `df = df[df.col == 'A']`.
-- **Multi-input nodes**: first parent → `df`, second → `df2`, third → `df3`;
-  `dfs` is the ordered list. Order is a stable sort of parent node ids.
+- **Multi-input nodes** (processors and chart_out): first parent → `df`,
+  second → `df2`, third → `df3`; `dfs` is the ordered list. Order is a stable
+  sort of parent node ids, which users don't control — when inputs differ in
+  kind, tell them apart by their columns, not their position.
 - Node code is `exec()`-ed in an isolated scope per node. Nothing except `df`
   survives across nodes. Flow-level **imports** and **shared_functions**
   (the "Flow Preamble") are exec-ed into EVERY node's scope first.
@@ -58,7 +60,7 @@ editing node code, flows, or SFS source.
 trigger (manual/cron; advanced scheduler fields: retries, retry_backoff_sec,
 alert_on_failure, alert_email, weekdays_only, skip_dates) · processor (code +
 engine + optional persist config) · stop (mode hard|tap) · table_out ·
-chart_out (set `result` to an echarts dict / plotly fig / matplotlib) ·
+chart_out (set `result` to an echarts dict / plotly fig / matplotlib; plugins may offer starting code as templates) ·
 router (conditional branching: branches[{label,expr}] + default_label; edge.sourceHandle is the branch label; untaken branches are blocked) · profile_out (auto per-column stats) · explore_out (no code; caches its input as an Explore view source) · report_out
 (Streamlit code; `st`, `df`, `pd` injected) · annotation (text only; never
 executes) · ai_start / ai_step / ai_end (design-time specs compiled to

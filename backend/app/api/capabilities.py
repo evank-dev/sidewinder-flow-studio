@@ -10,7 +10,7 @@ import importlib.util
 from fastapi import APIRouter
 
 from app.engine import executor as _executor  # noqa: F401 — registers builtins
-from app.engine.registry import list_engines, loaded_plugins
+from app.engine.registry import list_engines, list_templates, loaded_plugins
 
 router = APIRouter()
 
@@ -28,6 +28,7 @@ async def get_capabilities():
     return {
         "engines": engines,
         "plugins": loaded_plugins(),
+        "templates": list_templates(),
         "features": {
             # Optional capabilities the UI can gate on
             "enterprise_engines": any(

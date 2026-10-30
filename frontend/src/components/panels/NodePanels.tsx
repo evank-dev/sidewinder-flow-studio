@@ -669,7 +669,7 @@ export function StopPanel({ nodeId }: { nodeId: string }) {
 
 // ── Chart Out panel ───────────────────────────────────────────────────────────
 
-const CHART_HINT = `# df is the incoming DataFrame
+const CHART_HINT = `# df is the incoming DataFrame (with several inputs: df2, df3, … and the list dfs)
 # Set \`result\` to a Plotly figure, ECharts dict, or draw with matplotlib.
 #
 # ── Plotly ──────────────────────────────────────────────
@@ -689,9 +689,24 @@ const CHART_HINT = `# df is the incoming DataFrame
 # }
 `
 
+// Chart templates contributed by plugins (via /api/capabilities)
+type ChartTemplate = { name: string; code: string; description: string; source: string }
+let _chartTemplates: ChartTemplate[] | null = null
+
 export function ChartOutPanel({ nodeId }: { nodeId: string }) {
   const { activeFlowId, updateNodeData } = useStore()
   const data = useNodeData(nodeId)
+
+  const [templates, setTemplates] = useState<ChartTemplate[]>(_chartTemplates ?? [])
+  useEffect(() => {
+    if (_chartTemplates) return
+    api.capabilities()
+      .then((c) => {
+        _chartTemplates = (c?.templates ?? []).filter((t) => t.kind === 'chart')
+        setTemplates(_chartTemplates)
+      })
+      .catch(() => {/* no templates */})
+  }, [])
 
   const [label, setLabel] = useState(data.label ?? 'Chart View')
   const [code,  setCode]  = useState(data.code  ?? '')
@@ -736,6 +751,31 @@ export function ChartOutPanel({ nodeId }: { nodeId: string }) {
           onBlur={save}
         />
       </div>
+
+      {templates.length > 0 && (
+        <div className="shrink-0">
+          <label className="label" htmlFor={`chart-template-${nodeId}`}>Start from a template</label>
+          <select
+            id={`chart-template-${nodeId}`}
+            className="input text-xs"
+            value=""
+            onChange={(e) => {
+              const t = templates.find((x) => x.name === e.target.value)
+              if (!t) return
+              if (code.trim() && !window.confirm(`Replace the chart code with "${t.name}"?`)) return
+              setCode(t.code)
+              if (activeFlowId) updateNodeData(activeFlowId, nodeId, { label, code: t.code })
+            }}
+          >
+            <option value="">— pick a template —</option>
+            {templates.map((t) => (
+              <option key={`${t.source}:${t.name}`} value={t.name} title={t.description}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className="shrink-0">
         <AgentBox
