@@ -9,10 +9,11 @@ Adding a preset means adding an entry here. Each entry has:
     variable    independent variable name used in `expression`
     lmfit       optional lmfit built-in model class (and kwargs) to fit with;
                 its own `guess()` then supplies starting values
-    guess       starting values for expression presets: each value is an
-                expression evaluated against the data (see _guess_namespace in
-                fit.py: x, y, np, linfit, x_at, dominant_freq, …). A guess that
-                fails falls back to 1.
+    guess       starting values for expression presets: each value is a NumPy
+                expression over the data arrays x and y, which may also use the
+                helpers linfit, x_at and dominant_freq (fit.GUESS_HELPERS). View
+                as Python shows these expressions verbatim. A guess that fails
+                falls back to 1.
     guess_positive  lmfit's guess takes logs: guess from points with x, y > 0
     free        lmfit parameters that are tied by default but should be fitted
     linear      True when the model is linear in its parameters (exact solution;
@@ -42,17 +43,17 @@ PRESETS: list[dict] = [
     {"id": "exp_decay_offset", "label": "Exponential decay + offset", "group": "General",
      "expression": "amplitude*exp(-x/decay) + c", "variable": "x",
      # Background ≈ the lowest reading; the rest decays (log of the excess).
-     "guess": {"c": "min(y)", "decay": "-1/linfit(x, log(y - min(y)))[0]",
-               "amplitude": "exp(linfit(x, log(y - min(y)))[1])"}},
+     "guess": {"c": "np.min(y)", "decay": "-1/linfit(x, np.log(y - np.min(y)))[0]",
+               "amplitude": "np.exp(linfit(x, np.log(y - np.min(y)))[1])"}},
     {"id": "exp_growth", "label": "Exponential growth", "group": "General",
      "expression": "A*exp(k*x)", "variable": "x",
-     "guess": {"k": "linfit(x, log(y))[0]", "A": "exp(linfit(x, log(y))[1])"}},
+     "guess": {"k": "linfit(x, np.log(y))[0]", "A": "np.exp(linfit(x, np.log(y))[1])"}},
     {"id": "power_law", "label": "Power law", "group": "General",
      "expression": "amplitude*x**exponent", "variable": "x",
      "lmfit": ("PowerLawModel", {}), "guess_positive": True},
     {"id": "logistic", "label": "Logistic", "group": "General",
      "expression": "L/(1 + exp(-k*(x - x0)))", "variable": "x",
-     "guess": {"L": "max(y)", "x0": "x_at(max(y)/2)", "k": "4/ptp(x)"}},
+     "guess": {"L": "np.max(y)", "x0": "x_at(np.max(y)/2)", "k": "4/np.ptp(x)"}},
 
     # ── Physics ──────────────────────────────────────────────────────────────
     {"id": "gaussian", "label": "Gaussian", "group": "Physics",
@@ -69,25 +70,25 @@ PRESETS: list[dict] = [
      "variable": "x", "lmfit": ("VoigtModel", {}), "free": ["gamma"], "evaluable": False},
     {"id": "damped_oscillation", "label": "Damped oscillation", "group": "Physics",
      "expression": "A*exp(-t/tau)*cos(2*pi*f*t + phi) + C", "variable": "t",
-     "guess": {"C": "mean(y)", "A": "max(abs(y - mean(y)))", "f": "dominant_freq(x, y)",
-               "tau": "ptp(x)/2", "phi": "0"}},
+     "guess": {"C": "np.mean(y)", "A": "np.max(np.abs(y - np.mean(y)))", "f": "dominant_freq(x, y)",
+               "tau": "np.ptp(x)/2", "phi": "0"}},
 
     # ── Chemistry ────────────────────────────────────────────────────────────
     {"id": "arrhenius", "label": "Arrhenius", "group": "Chemistry",
      "expression": f"A*exp(-Ea/({R_GAS}*T))", "variable": "T",
      # Linearised fit of ln k against 1/T gives both starting values.
-     "guess": {"Ea": f"-linfit(1/x, log(y))[0]*{R_GAS}", "A": "exp(linfit(1/x, log(y))[1])"}},
+     "guess": {"Ea": f"-linfit(1/x, np.log(y))[0]*{R_GAS}", "A": "np.exp(linfit(1/x, np.log(y))[1])"}},
     {"id": "michaelis_menten", "label": "Michaelis–Menten", "group": "Chemistry",
      "expression": "Vmax*S/(Km + S)", "variable": "S",
-     "guess": {"Vmax": "max(y)", "Km": "x_at(max(y)/2)"}},
+     "guess": {"Vmax": "np.max(y)", "Km": "x_at(np.max(y)/2)"}},
 
     # ── Biology ──────────────────────────────────────────────────────────────
     {"id": "hill", "label": "Hill equation", "group": "Biology",
      "expression": "Vmax*x**n/(K**n + x**n)", "variable": "x",
-     "guess": {"Vmax": "max(y)", "K": "x_at(max(y)/2)", "n": "1"}},
+     "guess": {"Vmax": "np.max(y)", "K": "x_at(np.max(y)/2)", "n": "1"}},
     {"id": "logistic_growth", "label": "Logistic growth", "group": "Biology",
      "expression": "K/(1 + ((K - N0)/N0)*exp(-r*t))", "variable": "t",
-     "guess": {"K": "max(y)", "N0": "y[argmin(x)]", "r": "4/ptp(x)"}},
+     "guess": {"K": "np.max(y)", "N0": "y[np.argmin(x)]", "r": "4/np.ptp(x)"}},
 ]
 
 CUSTOM = "custom"

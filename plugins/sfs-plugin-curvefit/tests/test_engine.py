@@ -160,3 +160,45 @@ def test_template_is_registered():
     registry.load_plugins()
     t = next(t for t in registry.list_templates("chart") if t["name"] == "Fit with residuals")
     assert t["source"] == "plugin:curvefit" and "is_parameter_table" in t["code"]
+
+
+def test_convert_to_code_node_gives_the_same_frames(run_flow):
+    """Run fit → evaluate, convert both nodes to pandas with their generated
+    code (as the Convert button does), run again: identical outputs."""
+    import pandas as pd
+
+    flow = _chain({"mode": "columns", "output": "fit"}, "data", "fit")
+    asyncio.run(executor.execute_flow("proj1", flow, {}, {}))
+    before = {n: frame_cache.load_frame("proj1", n) for n in ("fit", "ev")}
+
+    registry.load_plugins()
+    for node in flow["nodes"]:
+        d = node["data"]
+        if d.get("engine", "").startswith("curvefit"):
+            spec = registry.ENGINES[d["engine"]]
+            parents = [e["source"] for e in flow["edges"] if e["target"] == node["id"]]
+            inputs = [frame_cache.load_frame("proj1", p) for p in parents]
+            d.update(engine="pandas", code=spec.to_code(spec.resolve_params(d), inputs))
+    results = {r["node_id"]: r for r in asyncio.run(executor.execute_flow("proj1", flow, {}, {}))}
+    for n in ("fit", "ev"):
+        assert results[n]["status"] == "ok", results[n].get("detail")
+        pd.testing.assert_frame_equal(frame_cache.load_frame("proj1", n), before[n], rtol=1e-9)
+
+
+def test_to_code_endpoint(run_flow):
+    from fastapi.testclient import TestClient
+    from app.core.app_factory import create_app
+
+    flow = _chain({"mode": "range", "start": 0, "stop": 5, "points": 6})
+    asyncio.run(executor.execute_flow("proj1", flow, {}, {}))
+    client = TestClient(create_app())
+    ev = next(n for n in flow["nodes"] if n["id"] == "ev")["data"]
+    r = client.post("/api/capabilities/to-code", json={"engine": "curvefit_eval", "node_data": ev,
+                                                       "project_id": "proj1", "parent_ids": ["fit", "data"]})
+    assert r.status_code == 200 and "np.linspace(0.0, 5.0, 6)" in r.json()["code"]
+    r = client.post("/api/capabilities/to-code", json={"engine": "curvefit_eval", "node_data": ev})
+    assert r.status_code == 400 and "Run the flow once" in r.json()["detail"]
+    r = client.post("/api/capabilities/to-code", json={"engine": "pandas", "node_data": {}})
+    assert r.status_code == 404
+    caps = {e["name"]: e for e in client.get("/api/capabilities/").json()["engines"]}
+    assert caps["curvefit_fit"]["has_to_code"] and not caps["pandas"]["has_to_code"]

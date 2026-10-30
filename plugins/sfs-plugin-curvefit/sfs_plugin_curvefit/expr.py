@@ -17,6 +17,8 @@ from typing import Callable
 
 FUNCTIONS = ("exp", "log", "sqrt", "sin", "cos", "tan", "sinh", "cosh", "tanh", "abs")
 CONSTANTS = ("pi", "e")
+# Module names the model's Python source refers to; a parameter can't shadow them.
+RESERVED = ("np", "unp", "uabs")
 
 
 class ExpressionError(ValueError):
@@ -29,7 +31,58 @@ class ParsedModel:
     variable: str
     params: list[str]          # in order of first appearance
     sympy_expr: object
-    func: Callable             # func(variable, *params) → numpy array
+    func: Callable             # func(*args) → numpy array
+    args: list[str]            # the variable (if used), then the parameters
+    np_body: str               # the expression in NumPy:          A*np.exp(-t/tau)
+    unp_body: str              # … and with uncertainties' unumpy: A*unp.exp(-t/tau)
+
+    def source(self, body: str | None = None, name: str = "model") -> str:
+        """The model as a Python function. View as Python shows exactly this
+        text, and the engine runs it, so both always compute the same thing."""
+        return f"def {name}({', '.join(self.args)}):\n    return {body or self.np_body}\n"
+
+    def uncertain_func(self) -> Callable:
+        """The model over uncertainties' arrays (first-order error propagation)."""
+        return _compile(self.source(self.unp_body), self.args)
+
+
+def uabs(u):
+    """abs() for uncertainties arrays (their own abs is deprecated)."""
+    import numpy as np
+    from uncertainties import unumpy as unp
+    return np.where(unp.nominal_values(u) < 0, -u, u)
+
+
+def _compile(source: str, args: list[str]) -> Callable:
+    import numpy as np
+    from uncertainties import unumpy as unp
+
+    scope = {"np": np, "unp": unp, "uabs": uabs, "__builtins__": {}}
+    exec(source, scope)  # noqa: S102 — source built from validated tokens only
+    return scope["model"]
+
+
+def _rewrite(text: str, module: str) -> str:
+    """The expression as Python: whitelisted functions and constants prefixed
+    with their module, ^ as **. Everything else is kept as written."""
+    toks = list(tokenize.generate_tokens(io.StringIO(text).readline))
+    out, pos = [], 0
+    for i, t in enumerate(toks):
+        if t.type == tokenize.ENDMARKER:
+            break
+        start, end = t.start[1], t.end[1]
+        new = t.string
+        if t.type == tokenize.NAME:
+            called = i + 1 < len(toks) and toks[i + 1].string == "("
+            if called and t.string in FUNCTIONS:
+                new = "uabs" if (module == "unp" and t.string == "abs") else f"{module}.{t.string}"
+            elif not called and t.string in CONSTANTS:
+                new = f"np.{t.string}"
+        elif t.type == tokenize.OP and t.string == "^":
+            new = "**"
+        out.append(text[pos:start] + new)
+        pos = end
+    return ("".join(out) + text[pos:]).strip()
 
 
 def _names(text: str) -> list[tuple[str, bool]]:
@@ -53,12 +106,14 @@ def parse(expression: str, variable: str = "x", *, strict: bool = True) -> Parse
     import sympy as sp
     from sympy.parsing.sympy_parser import convert_xor, parse_expr, standard_transformations
 
-    text = (expression or "").strip()
+    text = " ".join((expression or "").split())     # one line
     variable = (variable or "x").strip()
     if not text:
         raise ExpressionError("The model expression is empty")
     if not variable.isidentifier() or keyword.iskeyword(variable):
         raise ExpressionError(f"'{variable}' is not a valid variable name")
+    if variable in RESERVED:
+        raise ExpressionError(f"'{variable}' is reserved; use another variable name")
 
     functions = {"exp": sp.exp, "log": sp.log, "sqrt": sp.sqrt, "sin": sp.sin, "cos": sp.cos,
                  "tan": sp.tan, "sinh": sp.sinh, "cosh": sp.cosh, "tanh": sp.tanh, "abs": sp.Abs}
@@ -81,6 +136,8 @@ def parse(expression: str, variable: str = "x", *, strict: bool = True) -> Parse
         elif name in functions:
             raise ExpressionError(f"'{name}' is a function; call it, e.g. {name}(x)")
         else:
+            if name in RESERVED:
+                raise ExpressionError(f"'{name}' is reserved; rename that parameter")
             local[name] = sp.Symbol(name, real=True)
             if name != variable and name not in params:
                 params.append(name)
@@ -102,12 +159,13 @@ def parse(expression: str, variable: str = "x", *, strict: bool = True) -> Parse
     except Exception as exc:  # SyntaxError, TypeError from bad arity, …
         raise ExpressionError(f"Could not parse the expression: {exc}") from None
 
-    if variable not in local:
-        local[variable] = sp.Symbol(variable, real=True)
-    args = [local[variable]] + [local[p] for p in params]
-    func = sp.lambdify(args, sym, modules="numpy")
-    return ParsedModel(expression=text.replace("^", "**"), variable=variable,
-                       params=params, sympy_expr=sym, func=func)
+    args = ([variable] if variable in local else []) + params
+    np_body = _rewrite(text, "np")
+    pm = ParsedModel(expression=text.replace("^", "**"), variable=variable, params=params,
+                     sympy_expr=sym, func=None, args=args, np_body=np_body,
+                     unp_body=_rewrite(text, "unp"))
+    pm.func = _compile(pm.source(), args)
+    return pm
 
 
 def parse_assignments(text: str, what: str = "initial guesses") -> dict[str, float]:

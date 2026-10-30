@@ -126,6 +126,18 @@ def run_eval(ec):
                             output=p.get("output") or "value", x=p.get("x") or "", **common)
 
 
+def _to_code(api, name):
+    """View as Python, on SFS versions whose EngineSpec has `to_code`."""
+    import dataclasses
+    if "to_code" not in {f.name for f in dataclasses.fields(api.EngineSpec)}:
+        return {}
+
+    def to_code(params, inputs):
+        from . import codegen
+        return getattr(codegen, name)(params, inputs)
+    return {"to_code": to_code}
+
+
 def _register_templates(api):
     # Older SFS without templates: the engines still work.
     if not hasattr(api, "register_template"):
@@ -151,6 +163,7 @@ def register(api):
         requires=("lmfit", "sympy", "numpy"),
         hint=FIT_HINT,
         params=FIT_PARAMS,
+        **_to_code(api, "fit_code"),
     ))
     _register_templates(api)
     api.register_engine(api.EngineSpec(
@@ -165,4 +178,5 @@ def register(api):
         requires=("lmfit", "sympy", "numpy", "uncertainties"),
         hint=EVAL_HINT,
         params=EVAL_PARAMS,
+        **_to_code(api, "eval_code"),
     ))

@@ -121,18 +121,6 @@ def _lmfit_eval(preset: dict, values: dict, xs):
     return m.eval(params, x=xs)
 
 
-def _uncertain_modules():
-    import numpy as np
-    from uncertainties import unumpy as unp
-
-    def uabs(u):
-        return np.where(unp.nominal_values(u) < 0, -u, u)
-
-    return [{"exp": unp.exp, "log": unp.log, "sqrt": unp.sqrt, "sin": unp.sin, "cos": unp.cos,
-             "tan": unp.tan, "sinh": unp.sinh, "cosh": unp.cosh, "tanh": unp.tanh,
-             "abs": uabs, "Abs": uabs}, "numpy"]
-
-
 def evaluate_range(table=None, *, model=FROM_FIT, expression="", variable="x", parameters="",
                    start=None, stop=None, points=200):
     """The model over an even grid. The grid column is named after the fit's x
@@ -162,7 +150,10 @@ def evaluate_range(table=None, *, model=FROM_FIT, expression="", variable="x", p
                             f"{', '.join(missing)} (e.g. Parameters: "
                             f"{', '.join(f'{p}=…' for p in missing)})")
         with np.errstate(all="ignore"):
-            ys = np.broadcast_to(pm.func(xs, *[values[p] for p in pm.params]), xs.shape)
+            args = {p: values[p] for p in pm.params}
+            if pm.variable in pm.args:
+                args[pm.variable] = xs
+            ys = np.broadcast_to(pm.func(**args), xs.shape)
     return pd.DataFrame({x_column or var: xs, "value": np.asarray(ys, dtype=float)})
 
 
@@ -203,12 +194,11 @@ def evaluate_columns(df, table=None, *, model=FROM_FIT, expression="", variable=
         out[output] = _lmfit_eval(preset, values, df[var].to_numpy(dtype=float))
         return out
 
-    names = [pm.variable] + pm.params
-    used = {s.name for s in pm.sympy_expr.free_symbols}
+    names = pm.args                      # only the names the expression uses
     for name in names:
-        if name in values and name in columns and name in used:
+        if name in values and name in columns:
             print(f"Note: '{name}' is both a parameter and a column; using the parameter value")
-    from_columns = [n for n in names if n not in values and n in used]
+    from_columns = [n for n in names if n not in values]
     missing = [n for n in from_columns if n not in columns]
     if missing:
         raise EvalError(f"No value for {', '.join(missing)}: not a parameter and not a column. "
@@ -221,22 +211,14 @@ def evaluate_columns(df, table=None, *, model=FROM_FIT, expression="", variable=
             raise EvalError(f"Column '{name}' must be numeric") from None
 
     err_cols = [n for n in from_columns if f"{n}_err" in columns]
-    args = {}
-    for n in names:
-        if n in values:
-            args[n] = values[n]
-        elif n in from_columns:
-            args[n] = col(n)
-        else:
-            args[n] = 0.0  # the variable, when the expression doesn't use it
+    args = {n: (values[n] if n in values else col(n)) for n in names}
 
     if not err_cols:
         with np.errstate(all="ignore"):
-            res = pm.func(*[args[n] for n in names])
+            res = pm.func(**args)
         out[output] = np.broadcast_to(np.asarray(res, dtype=float), (len(df),))
         return out
 
-    import sympy as sp
     from uncertainties import unumpy as unp
 
     for n in err_cols:
@@ -244,11 +226,8 @@ def evaluate_columns(df, table=None, *, model=FROM_FIT, expression="", variable=
         if (err[np.isfinite(err)] < 0).any():
             raise EvalError(f"'{n}_err' has negative uncertainties")
         args[n] = unp.uarray(args[n], np.nan_to_num(err, nan=0.0))
-    syms = {s.name: s for s in pm.sympy_expr.free_symbols}
-    ufunc = sp.lambdify([syms.get(n, sp.Symbol(n, real=True)) for n in names],
-                        pm.sympy_expr, modules=_uncertain_modules())
     with np.errstate(all="ignore"):
-        res = np.broadcast_to(np.asarray(ufunc(*[args[n] for n in names]), dtype=object), (len(df),))
+        res = np.broadcast_to(np.asarray(pm.uncertain_func()(**args), dtype=object), (len(df),))
     out[output] = unp.nominal_values(res).astype(float)
     out[f"{output}_err"] = unp.std_devs(res).astype(float)
     return out

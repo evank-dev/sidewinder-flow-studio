@@ -75,36 +75,41 @@ def build_model(model: str, expression: str = "", variable: str = "x") -> ModelS
 
 # ── starting values ───────────────────────────────────────────────────────────
 
+# Helpers the preset guess rules may call. They are kept as source so that View
+# as Python can include the ones a model uses, word for word.
+GUESS_HELPERS = {
+    "linfit": '''def linfit(u, v):
+    """(slope, intercept) of a straight line through the finite (u, v) points."""
+    u, v = np.asarray(u, float), np.asarray(v, float)
+    ok = np.isfinite(u) & np.isfinite(v)
+    slope, intercept = np.polyfit(u[ok], v[ok], 1)
+    return slope, intercept
+''',
+    "x_at": '''def x_at(level):
+    """The x where y comes closest to `level`."""
+    return x[np.argmin(np.abs(y - level))]
+''',
+    "dominant_freq": '''def dominant_freq(xs, ys):
+    """The strongest non-zero frequency, after resampling onto an even grid."""
+    order = np.argsort(xs)
+    xs, ys = np.asarray(xs, float)[order], np.asarray(ys, float)[order]
+    n = max(len(xs), 16)
+    grid = np.linspace(xs[0], xs[-1], n)
+    spectrum = np.abs(np.fft.rfft(np.interp(grid, xs, ys) - np.mean(ys)))
+    freqs = np.fft.rfftfreq(n, d=grid[1] - grid[0])
+    return freqs[1:][np.argmax(spectrum[1:])]
+''',
+}
+
+
 def _guess_namespace(x, y) -> dict:
     import numpy as np
 
-    def linfit(u, v):
-        """(slope, intercept) of a straight line through finite (u, v) points."""
-        u, v = np.asarray(u, float), np.asarray(v, float)
-        ok = np.isfinite(u) & np.isfinite(v)
-        slope, intercept = np.polyfit(u[ok], v[ok], 1)
-        return float(slope), float(intercept)
-
-    def x_at(level):
-        """x where y is closest to `level`."""
-        return float(x[np.argmin(np.abs(y - level))])
-
-    def dominant_freq(xs, ys):
-        """Strongest non-zero frequency, after resampling onto an even grid."""
-        order = np.argsort(xs)
-        xs, ys = np.asarray(xs, float)[order], np.asarray(ys, float)[order]
-        n = max(len(xs), 16)
-        grid = np.linspace(xs[0], xs[-1], n)
-        vals = np.interp(grid, xs, ys) - np.mean(ys)
-        spec = np.abs(np.fft.rfft(vals))
-        freqs = np.fft.rfftfreq(n, d=grid[1] - grid[0])
-        return float(freqs[1:][np.argmax(spec[1:])])
-
-    with np.errstate(all="ignore"):
-        return {"x": x, "y": y, "np": np, "max": np.max, "min": np.min, "mean": np.mean,
-                "abs": np.abs, "log": np.log, "exp": np.exp, "sqrt": np.sqrt, "ptp": np.ptp,
-                "argmin": np.argmin, "argmax": np.argmax, "linfit": linfit, "x_at": x_at,
-                "dominant_freq": dominant_freq, "__builtins__": {}}
+    builtins = {"len": len, "max": max, "min": min, "float": float, "abs": abs}
+    ns = {"np": np, "x": x, "y": y, "__builtins__": builtins}
+    for src in GUESS_HELPERS.values():
+        exec(src, ns)  # noqa: S102 — fixed helper source above
+    return ns
 
 
 def _initial_params(spec: ModelSpec, x, y, initial: dict[str, float]):

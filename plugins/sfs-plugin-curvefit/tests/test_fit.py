@@ -61,6 +61,17 @@ def test_every_preset_has_a_recovery_case():
     assert set(TRUE) == set(presets.BY_ID)
 
 
+@pytest.mark.parametrize("preset_id", [p["id"] for p in presets.PRESETS if p.get("guess")])
+def test_every_guess_rule_gives_a_number(preset_id):
+    """A failing rule silently falls back to 1, so check each one works."""
+    from sfs_plugin_curvefit.fit import _guess_namespace
+    df, _ = _synthetic(preset_id)
+    ns = _guess_namespace(df.x.to_numpy(), df.y.to_numpy())
+    for name, rule in presets.BY_ID[preset_id]["guess"].items():
+        with np.errstate(all="ignore"):
+            assert np.isfinite(float(eval(rule, ns))), (name, rule)
+
+
 @pytest.mark.parametrize("preset_id", list(TRUE))
 def test_recovers_known_parameters_from_automatic_guesses(preset_id):
     df, true = _synthetic(preset_id)
