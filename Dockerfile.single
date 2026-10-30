@@ -31,6 +31,14 @@ ARG SFS_EXTRAS=all-connectors,pushdown
 COPY backend/ .
 RUN pip install --no-cache-dir ".${SFS_EXTRAS:+[$SFS_EXTRAS]}" aiofiles
 
+# Plugins from plugins/, by short name (sfs-plugin-<name>), comma-separated.
+# Override with --build-arg SFS_PLUGINS=curvefit,sklearn (or SFS_PLUGINS= for none).
+ARG SFS_PLUGINS=curvefit
+COPY plugins/ /opt/sfs-plugins/
+RUN for p in $(echo "$SFS_PLUGINS" | tr ',' ' '); do \
+      pip install --no-cache-dir "/opt/sfs-plugins/sfs-plugin-$p" || exit 1; \
+    done
+
 # One-line summary of installed connector drivers / pushdown engines.
 RUN python scripts/driver_summary.py
 

@@ -17,9 +17,19 @@ WORKDIR /app
 # behave inconsistently inside containers.
 # Connector drivers and the pushdown engines are optional extras in pyproject.toml.
 # Override with --build-arg SFS_EXTRAS=trino,pushdown (or SFS_EXTRAS= for core only).
+# The build context is the repository root (so plugins/ is visible):
+#   docker build -f backend/Dockerfile .
 ARG SFS_EXTRAS=all-connectors,pushdown
-COPY . .
+COPY backend/ .
 RUN pip install --no-cache-dir ".${SFS_EXTRAS:+[$SFS_EXTRAS]}"
+
+# Plugins from plugins/, by short name (sfs-plugin-<name>), comma-separated.
+# Override with --build-arg SFS_PLUGINS=curvefit,sklearn (or SFS_PLUGINS= for none).
+ARG SFS_PLUGINS=curvefit
+COPY plugins/ /opt/sfs-plugins/
+RUN for p in $(echo "$SFS_PLUGINS" | tr ',' ' '); do \
+      pip install --no-cache-dir "/opt/sfs-plugins/sfs-plugin-$p" || exit 1; \
+    done
 
 # httpx is sometimes skipped by pip's resolver as "already satisfied" in slim
 # base images even though it's not actually importable. Force it explicitly so

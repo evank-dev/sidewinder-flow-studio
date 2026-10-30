@@ -246,7 +246,7 @@ SFS_EXTRAS=trino,pushdown     # any extras from the list above, comma-separated
 SFS_EXTRAS=                   # empty: core engines only (pandas, polars, duckdb)
 ```
 
-Then rebuild: `docker compose up --build -d` (or `docker compose -f docker-compose.single.yml up --build -d`). Without Compose, pass it directly: `docker build --build-arg SFS_EXTRAS=trino ./backend`.
+Then rebuild: `docker compose up --build -d` (or `docker compose -f docker-compose.single.yml up --build -d`). Without Compose, pass it directly, from the repository root: `docker build -f backend/Dockerfile --build-arg SFS_EXTRAS=trino .`. Plugins from `plugins/` are chosen the same way with `SFS_PLUGINS` (default `curvefit`; empty for none).
 
 The build log prints which drivers made it into the image, e.g.:
 

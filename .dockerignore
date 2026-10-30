@@ -6,6 +6,17 @@ backend/*.db
 backend/projects/
 backend/frame_cache/
 backend/.env
+backend/*.duckdb
+backend/reports_data/
+backend/plugin_venvs/
+backend/*.egg-info
+backend/.pytest_cache
+
+# Plugins
+plugins/**/__pycache__
+plugins/**/*.egg-info
+plugins/**/.pytest_cache
+plugins/**/build
 
 # Frontend
 frontend/node_modules
