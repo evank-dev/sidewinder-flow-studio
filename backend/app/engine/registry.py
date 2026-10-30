@@ -17,6 +17,7 @@ The referenced callable is invoked at startup with the public registry API:
     def register(api):
         api.register_engine(EngineSpec(name="my_engine", ..., run=my_run))
         api.register_template(kind="chart", name="My plot", code="...")
+        api.register_example(name="My example", flow={"nodes": [...], "edges": [...]})
 
 See docs/PLUGINS.md for the full contract.
 """
@@ -175,6 +176,33 @@ def list_templates(kind: str | None = None) -> list[dict]:
     return [dict(t) for t in TEMPLATES if kind is None or t["kind"] == kind]
 
 
+# ── Examples ──────────────────────────────────────────────────────────────────
+# Ready-made flows a plugin ships (sample data + nodes). The project picker
+# lists them; picking one creates a new project holding a copy of the flow.
+
+EXAMPLES: list[dict] = []
+
+
+def register_example(*, name: str, flow: dict, description: str = "",
+                     source: str = "builtin") -> None:
+    if not isinstance(flow, dict) or not isinstance(flow.get("nodes"), list):
+        raise ValueError(f"Example '{name}': flow must be a dict with a 'nodes' list")
+    if any(e["name"] == name for e in EXAMPLES):
+        log.warning("Example '%s' already registered — ignoring duplicate", name)
+        return
+    EXAMPLES.append({"name": name, "description": description, "flow": flow, "source": source})
+    log.info("Registered example '%s' (%s)", name, source)
+
+
+def list_examples() -> list[dict]:
+    """Names and descriptions only; get_example() returns the flow."""
+    return [{k: e[k] for k in ("name", "description", "source")} for e in EXAMPLES]
+
+
+def get_example(name: str) -> dict | None:
+    return next((e for e in EXAMPLES if e["name"] == name), None)
+
+
 def list_engines() -> list[dict]:
     """Serializable engine list for /api/capabilities."""
     out = []
@@ -223,6 +251,11 @@ class RegistryAPI:
     def register_engine(self, spec: EngineSpec, *, override: bool = False) -> None:
         spec.source = self._source
         register_engine(spec, override=override)
+
+    def register_example(self, *, name: str, flow: dict, description: str = "") -> None:
+        """Ship a ready-made flow: {name?, nodes, edges, imports?} in the saved
+        project format. Users start a new project from it."""
+        register_example(name=name, flow=flow, description=description, source=self._source)
 
     def register_template(self, *, kind: str, name: str, code: str, description: str = "") -> None:
         """Offer starting code for a node type (today: kind="chart")."""

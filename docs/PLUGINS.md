@@ -318,10 +318,31 @@ tested. An unknown `kind` raises `ValueError`; a duplicate name is ignored
 with a warning. Guard the call with `hasattr(api, "register_template")` if
 your plugin also supports older SFS versions.
 
+## Examples (optional)
+
+A plugin can ship ready-made flows. The project picker lists them under
+**Start from an example**; picking one creates a new project holding a copy.
+
+```python
+def register(api):
+    api.register_example(
+        name="My plugin · Getting started",   # unique; shown in the picker
+        description="What it shows",           # tooltip
+        flow={"name": "Getting started", "nodes": [...], "edges": [...]},
+    )
+```
+
+`flow` uses the saved project format (`nodes` with `id`, `type`, `position`,
+`data`; `edges` with `source`, `target`, `sourceHandle: "out"`,
+`targetHandle: "in"`; optional `imports`). Include a trigger node, or one is
+added. Ship sample data as package data and read it in the first node with
+`importlib.resources`, so the example works in any install, Docker included.
+Test that each example runs through the executor.
+
 ## Discovering what's installed
 
 `GET /api/capabilities` returns registered engines (with `source`, `tier` and
-availability), registered templates, and the load status of every discovered
+availability), registered templates and examples, and the load status of every discovered
 plugin. The frontend
 renders the engine picker from this, so a newly installed plugin appears in the
 UI with no frontend change. Engines whose `requires` are missing appear greyed

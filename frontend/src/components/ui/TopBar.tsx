@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
-import { Play, Save, Plus, FolderOpen, ChevronDown, Square, RefreshCw, Compass } from 'lucide-react'
+import { Play, Save, Plus, FolderOpen, ChevronDown, Square, RefreshCw, Compass, BookOpen } from 'lucide-react'
 import { useStore } from '@/store'
+import { api } from '@/utils/api'
 import { AboutDialog } from './AboutDialog'
 
 export function TopBar() {
@@ -31,9 +32,18 @@ export function TopBar() {
     setShowProjects(false)
   }
 
+  // Example flows shipped by plugins (from /api/capabilities)
+  const [examples, setExamples] = useState<{ name: string; description: string }[]>([])
   const handleOpen = async () => {
     await loadProjects()
     setShowProjects(true)
+    api.capabilities().then((c) => setExamples(c?.examples ?? [])).catch(() => {})
+  }
+  const handleExample = async (name: string) => {
+    const project = await api.projects.fromExample(name)
+    await loadProjects()
+    await openProject(project.id)
+    setShowProjects(false)
   }
 
   const startRename = (e: React.MouseEvent, flowId: string, currentName: string) => {
@@ -135,6 +145,24 @@ export function TopBar() {
                 ))
               )}
             </div>
+            {examples.length > 0 && (
+              <div className="border-t border-canvas-border">
+                <div className="px-3 pt-2 pb-1 text-xs text-subtle uppercase tracking-wider">Start from an example</div>
+                <div className="max-h-40 overflow-y-auto pb-1">
+                  {examples.map((ex) => (
+                    <div
+                      key={ex.name}
+                      className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-surface-overlay text-xs text-slate-300"
+                      title={ex.description}
+                      onClick={() => handleExample(ex.name)}
+                    >
+                      <BookOpen size={12} className="shrink-0 text-violet-400" />
+                      <span className="flex-1 truncate">{ex.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {activeProject && (
               <div className="border-t border-canvas-border p-2">
                 <button

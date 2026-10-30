@@ -28,6 +28,22 @@ def create_project(body: ProjectCreate):
     return project_service.create_project(body.name, body.description)
 
 
+class FromExample(BaseModel):
+    example: str
+    name: str | None = None
+
+
+@router.post("/from-example", status_code=201)
+def create_from_example(body: FromExample):
+    from app.engine.registry import get_example, load_plugins
+    load_plugins()
+    ex = get_example(body.example)
+    if ex is None:
+        raise HTTPException(404, f"No example named '{body.example}'")
+    return project_service.create_project_from_flow(
+        body.name or ex["name"], ex["description"], ex["flow"])
+
+
 @router.get("/{pid}")
 def get_project(pid: str):
     p = project_service.get_project(pid)

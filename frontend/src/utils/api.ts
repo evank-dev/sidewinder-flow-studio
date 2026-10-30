@@ -25,6 +25,8 @@ export const api = {
     save: (id: string, payload: object) =>
       req<Project>(`/projects/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
     delete: (id: string) => req<void>(`/projects/${id}`, { method: 'DELETE' }),
+    fromExample: (example: string, name?: string) =>
+      req<Project>('/projects/from-example', { method: 'POST', body: JSON.stringify({ example, name }) }),
   },
 
   connections: {
@@ -81,6 +83,7 @@ export const api = {
                available: boolean; unavailable_reason?: string }[]
     plugins: { name: string; loaded: boolean; error?: string }[]
     templates?: { kind: string; name: string; code: string; description: string; source: string }[]
+    examples?: { name: string; description: string; source: string }[]
     features: Record<string, boolean>
   }>('/capabilities/'),
 

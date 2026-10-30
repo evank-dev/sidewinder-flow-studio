@@ -32,6 +32,27 @@ def get_project(pid: str) -> dict | None:
     return json.loads(p.read_text()) if p.exists() else None
 
 
+def create_project_from_flow(name: str, description: str, flow: dict) -> dict:
+    """A new project whose first flow is a copy of `flow` (e.g. a plugin
+    example). Node ids are kept — frames are cached per project — but the flow
+    gets a fresh id. A Manual trigger is added if the flow has none."""
+    import copy
+    data = create_project(name, description)
+    f = data["flows"][0]
+    src = copy.deepcopy(flow)
+    nodes = src.get("nodes") or []
+    if any(n.get("type") == "trigger" for n in nodes):
+        f["nodes"] = nodes
+    else:
+        f["nodes"] += nodes
+    f["edges"] = src.get("edges") or []
+    f["name"] = src.get("name") or f["name"]
+    if src.get("imports"):
+        f["imports"] = src["imports"]
+    _path(data["id"]).write_text(json.dumps(data, indent=2))
+    return data
+
+
 def create_project(name: str, description: str = "") -> dict:
     pid = str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()

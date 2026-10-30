@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.engine import executor as _executor  # noqa: F401 — registers builtins
-from app.engine.registry import ENGINES, list_engines, list_templates, loaded_plugins
+from app.engine.registry import ENGINES, list_engines, list_examples, list_templates, loaded_plugins
 
 router = APIRouter()
 
@@ -30,6 +30,7 @@ async def get_capabilities():
         "engines": engines,
         "plugins": loaded_plugins(),
         "templates": list_templates(),
+        "examples": list_examples(),
         "features": {
             # Optional capabilities the UI can gate on
             "enterprise_engines": any(
