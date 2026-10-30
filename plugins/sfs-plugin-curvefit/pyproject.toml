@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=75.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sfs-plugin-curvefit"
+version = "0.1.0"
+description = "Curve fitting for Sidewinder Flow Studio — fit, evaluate, plot"
+requires-python = ">=3.11"
+license = { text = "AGPL-3.0-or-later" }
+dependencies = [
+    "lmfit>=1.3",
+    "uncertainties>=3.2",
+    "sympy>=1.13",
+    "scipy>=1.11",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pandas>=2.2"]
+
+# SFS discovers the plugin through this entry point.
+[project.entry-points."sfs.plugins"]
+curvefit = "sfs_plugin_curvefit.plugin:register"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sfs_plugin_curvefit*"]
