@@ -70,3 +70,67 @@ def test_code_cell_takes_over(run_flow):
     r = run_flow(flow_fit | {"code": code})
     assert r["status"] == "ok", r.get("detail")
     assert list(frame_cache.load_frame("proj1", "fit").columns) == ["name", "value"]
+
+
+def _chain(eval_data, data_id="data", fit_id="fit"):
+    """Start → measurements → Curve fit → Evaluate, with measurements also wired
+    into Evaluate. Node ids decide input order, so tests swap them."""
+    data_code = ("import numpy as np\n"
+                 "t = np.linspace(0, 20, 60)\n"
+                 "df = pd.DataFrame({'t': t, 'counts': 4*np.exp(-t/6) + 1, 't_err': 0.1})\n")
+    fit_data = {"x": "t", "y": "counts", "model": "exp_decay_offset"}
+    return {"id": "f1", "nodes": [
+        {"id": "start", "type": "trigger", "data": {"label": "Start"}},
+        {"id": data_id, "type": "processor", "data": {"label": "Measurements", "engine": "pandas", "code": data_code}},
+        {"id": fit_id, "type": "processor", "data": {"label": "Fit", "engine": "curvefit_fit", "code": "", **fit_data}},
+        {"id": "ev", "type": "processor", "data": {"label": "Evaluate", "engine": "curvefit_eval", "code": "", **eval_data}}],
+        "edges": [{"id": "e1", "source": "start", "target": data_id},
+                  {"id": "e2", "source": data_id, "target": fit_id},
+                  {"id": "e3", "source": fit_id, "target": "ev"},
+                  {"id": "e4", "source": data_id, "target": "ev"}]}
+
+
+@pytest.mark.parametrize("ids", [("data", "fit"), ("zdata", "afit")])
+def test_fit_then_evaluate_columns_in_either_input_order(run_flow, ids):
+    flow = _chain({"mode": "columns", "output": "fit"}, *ids)
+    results = {r["node_id"]: r for r in asyncio.run(executor.execute_flow("proj1", flow, {}, {}))}
+    assert results["ev"]["status"] == "ok", results["ev"].get("detail")
+    out = frame_cache.load_frame("proj1", "ev")
+    assert list(out.columns) == ["t", "counts", "t_err", "fit", "fit_err"]
+    np.testing.assert_allclose(out["fit"], out["counts"], rtol=1e-6)
+    # σ_f = |df/dt| σ_t, with df/dt = -A/τ e^(-t/τ)
+    expected = 4 / 6 * np.exp(-out["t"] / 6) * 0.1
+    np.testing.assert_allclose(out["fit_err"], expected, rtol=1e-5)
+
+
+def test_fit_then_evaluate_range(run_flow):
+    flow = _chain({"mode": "range", "start": 0, "stop": 10, "points": 11})
+    flow["edges"] = [e for e in flow["edges"] if e["id"] != "e4"]
+    results = {r["node_id"]: r for r in asyncio.run(executor.execute_flow("proj1", flow, {}, {}))}
+    assert results["ev"]["status"] == "ok", results["ev"].get("detail")
+    out = frame_cache.load_frame("proj1", "ev")
+    # Named after the fit's x column, so curve and data share an axis.
+    assert list(out.columns) == ["t", "value"] and len(out) == 11
+    np.testing.assert_allclose(out["value"], 4 * np.exp(-out["t"] / 6) + 1, rtol=1e-6)
+
+
+def test_evaluate_range_with_no_upstream_data(run_flow):
+    flow = {"id": "f1", "nodes": [
+        {"id": "start", "type": "trigger", "data": {"label": "Start"}},
+        {"id": "ev", "type": "processor", "data": {"label": "Evaluate", "engine": "curvefit_eval", "code": "",
+                                                    "mode": "range", "model": "gaussian",
+                                                    "parameters": "amplitude=1, center=0, sigma=1",
+                                                    "start": -3, "stop": 3, "points": 7}}],
+        "edges": [{"id": "e1", "source": "start", "target": "ev"}]}
+    results = {r["node_id"]: r for r in asyncio.run(executor.execute_flow("proj1", flow, {}, {}))}
+    assert results["ev"]["status"] == "ok", results["ev"].get("detail")
+    out = frame_cache.load_frame("proj1", "ev")
+    assert out["value"][3] == pytest.approx(1 / np.sqrt(2 * np.pi))
+
+
+def test_evaluate_is_registered():
+    registry.load_plugins()
+    eng = {e["name"]: e for e in registry.list_engines()}["curvefit_eval"]
+    assert eng["label"] == "Evaluate model" and eng["available"]
+    model = next(p for p in eng["params"] if p["key"] == "model")
+    assert model["default"] == "from_fit" and model["options"][0]["value"] == "from_fit"

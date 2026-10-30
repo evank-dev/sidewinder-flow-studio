@@ -7,7 +7,7 @@ package that registers one or more execution engines through the
 | Plugin | Engine | Status |
 |---|---|---|
 | [sfs-plugin-sklearn](sfs-plugin-sklearn) | `scikit-learn` (in-process) and `scikit-learn (isolated)` | reference implementation |
-| [sfs-plugin-curvefit](sfs-plugin-curvefit) | `Curve fit` (lmfit) | in development; included in the Docker images |
+| [sfs-plugin-curvefit](sfs-plugin-curvefit) | `Curve fit`, `Evaluate model` (lmfit) | in development; included in the Docker images |
 
 ## Installing
 

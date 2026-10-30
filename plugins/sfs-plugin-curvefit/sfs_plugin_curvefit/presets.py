@@ -39,6 +39,11 @@ PRESETS: list[dict] = [
     {"id": "exp_decay", "label": "Exponential decay", "group": "General",
      "expression": "amplitude*exp(-x/decay)", "variable": "x",
      "lmfit": ("ExponentialModel", {}), "guess_positive": True},
+    {"id": "exp_decay_offset", "label": "Exponential decay + offset", "group": "General",
+     "expression": "amplitude*exp(-x/decay) + c", "variable": "x",
+     # Background ≈ the lowest reading; the rest decays (log of the excess).
+     "guess": {"c": "min(y)", "decay": "-1/linfit(x, log(y - min(y)))[0]",
+               "amplitude": "exp(linfit(x, log(y - min(y)))[1])"}},
     {"id": "exp_growth", "label": "Exponential growth", "group": "General",
      "expression": "A*exp(k*x)", "variable": "x",
      "guess": {"k": "linfit(x, log(y))[0]", "A": "exp(linfit(x, log(y))[1])"}},

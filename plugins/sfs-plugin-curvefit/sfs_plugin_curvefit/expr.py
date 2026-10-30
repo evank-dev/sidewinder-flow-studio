@@ -47,7 +47,9 @@ def _names(text: str) -> list[tuple[str, bool]]:
     return out
 
 
-def parse(expression: str, variable: str = "x") -> ParsedModel:
+def parse(expression: str, variable: str = "x", *, strict: bool = True) -> ParsedModel:
+    """Parse a model. `strict` (fitting) requires the variable and at least one
+    parameter; Evaluate also accepts plain formulas such as m*g*h."""
     import sympy as sp
     from sympy.parsing.sympy_parser import convert_xor, parse_expr, standard_transformations
 
@@ -86,9 +88,9 @@ def parse(expression: str, variable: str = "x") -> ParsedModel:
         raise ExpressionError(
             f"Unknown function{'s' if len(unknown_calls) > 1 else ''}: {', '.join(unknown_calls)}. "
             f"Allowed: {', '.join(FUNCTIONS)}; constants: {', '.join(CONSTANTS)}")
-    if variable not in local:
+    if strict and variable not in local:
         raise ExpressionError(f"The expression doesn't use the variable '{variable}'")
-    if not params:
+    if strict and not params:
         raise ExpressionError("The expression has no parameters to fit")
 
     # Only number/symbol constructors are reachable; every name was mapped above.
@@ -100,6 +102,8 @@ def parse(expression: str, variable: str = "x") -> ParsedModel:
     except Exception as exc:  # SyntaxError, TypeError from bad arity, …
         raise ExpressionError(f"Could not parse the expression: {exc}") from None
 
+    if variable not in local:
+        local[variable] = sp.Symbol(variable, real=True)
     args = [local[variable]] + [local[p] for p in params]
     func = sp.lambdify(args, sym, modules="numpy")
     return ParsedModel(expression=text.replace("^", "**"), variable=variable,

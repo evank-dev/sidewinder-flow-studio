@@ -21,6 +21,7 @@ TRUE = {
     "poly4": ({"c0": 1, "c1": -2, "c2": 0.5, "c3": 0.1, "c4": -0.02}, (-5, 5)),
     "poly5": ({"c0": 1, "c1": -2, "c2": 0.5, "c3": 0.1, "c4": -0.02, "c5": 0.003}, (-5, 5)),
     "exp_decay": ({"amplitude": 5, "decay": 3}, (0, 15)),
+    "exp_decay_offset": ({"amplitude": 5, "decay": 3, "c": 2}, (0, 15)),
     "exp_growth": ({"A": 2, "k": 0.3}, (0, 10)),
     "power_law": ({"amplitude": 3, "exponent": 1.7}, (0.5, 10)),
     "logistic": ({"L": 10, "k": 1.5, "x0": 4}, (0, 10)),
@@ -77,7 +78,8 @@ def test_table_schema_and_model_rows():
     table, _ = fit(df, x="x", y="y", model="exp_decay")
     assert tuple(table.columns) == TABLE_COLUMNS
     model = table[table.kind == "model"].set_index("name").text.to_dict()
-    assert model == {"expression": "amplitude*exp(-x/decay)", "variable": "x", "preset": "exp_decay"}
+    assert model == {"expression": "amplitude*exp(-x/decay)", "variable": "x", "preset": "exp_decay",
+                     "x_column": "x"}
     assert _stat(table, "n_points") == len(df)
     # Arrow needs one type per column: value and stderr stay numeric.
     import pyarrow as pa
