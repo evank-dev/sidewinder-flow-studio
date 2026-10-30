@@ -7,6 +7,8 @@
  *
  * Supported types: string | number | boolean | select | column | connection
  * Unknown types fall back to a text input rather than rendering nothing.
+ * Select options are plain strings, or {value, label?, group?} objects; options
+ * that share a group are shown under that heading.
  */
 import { useEffect, useState } from 'react'
 import { useStore } from '@/store'
@@ -18,8 +20,26 @@ export interface EngineParam {
   type?: string
   default?: unknown
   required?: boolean
-  options?: string[]
+  options?: (string | SelectOption)[]
   help?: string
+}
+
+export interface SelectOption {
+  value: string
+  label?: string
+  group?: string
+}
+
+/** Options as objects, grouped in first-seen order ('' = no heading). */
+function groupOptions(options: (string | SelectOption)[]): [string, SelectOption[]][] {
+  const groups = new Map<string, SelectOption[]>()
+  for (const o of options) {
+    const opt = typeof o === 'string' ? { value: o } : o
+    const key = opt.group ?? ''
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(opt)
+  }
+  return [...groups.entries()]
 }
 
 interface Props {
@@ -81,7 +101,10 @@ export function EngineParams({ params, data, nodeId, onChange }: Props) {
               <select id={id} className="input text-xs" value={value as any}
                 onChange={(e) => onChange(p.key, e.target.value)}>
                 {!p.required && <option value="">—</option>}
-                {(p.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
+                {groupOptions(p.options ?? []).map(([group, opts]) => {
+                  const items = opts.map((o) => <option key={o.value} value={o.value}>{o.label ?? o.value}</option>)
+                  return group ? <optgroup key={group} label={group}>{items}</optgroup> : items
+                })}
               </select>
             )
             break

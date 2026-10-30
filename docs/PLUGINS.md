@@ -130,7 +130,7 @@ params=(
 | `type` | `string` \| `number` \| `boolean` \| `select` \| `column` \| `connection`. Unknown types render as text. |
 | `default` | Applied when the field is empty. |
 | `required` | Run fails early with a clear message if empty. |
-| `options` | Choices for `select`. |
+| `options` | Choices for `select`: strings, or `{"value", "label", "group"}` objects. Options that share a `group` are listed under that heading, in first-seen order. `value` is what is stored. |
 | `help` | Small hint under the field. |
 
 `column` renders a dropdown of the upstream frame's actual columns once that
