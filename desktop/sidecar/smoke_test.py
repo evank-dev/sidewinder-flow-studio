@@ -119,12 +119,13 @@ def main(exe: str) -> None:
         node = lambda i, d: {"id": i, "type": "processor", "position": {"x": 0, "y": 0}, "data": {"label": i, **d}}
         edge = lambda s, t: {"id": f"{s}-{t}", "source": s, "target": t, "sourceHandle": "out", "targetHandle": "in"}
         flow["nodes"] += [
+            node("plain", {"engine": "pandas", "code": 'df = pd.DataFrame({"a": [1, 2, 3]})'}),
             node("gen", {"engine": "pandas", "code": GEN}),
             node("duck", {"engine": "duckdb", "code": "SELECT g, COUNT(*) AS n, AVG(x) AS mean FROM df GROUP BY g ORDER BY g"}),
             node("pol", {"engine": "polars", "code": 'df = df.with_columns((pl.col("n") * 2).alias("n2"))'}),
             node("sql", {"engine": "sql", "target_connection": "lite", "code": "SELECT 41 + 1 AS answer"}),
         ]
-        flow["edges"] += [edge(trig, "gen"), edge("gen", "duck"), edge("duck", "pol"), edge(trig, "sql")]
+        flow["edges"] += [edge(trig, "plain"), edge("plain", "gen"), edge("gen", "duck"), edge("duck", "pol"), edge(trig, "sql")]
         call(f"/api/projects/{pid}", {"flows": [flow]}, method="PUT")
         call("/api/execute/run", {"project_id": pid, "flow_id": flow["id"], "flow_state": flow})
 
@@ -175,7 +176,12 @@ def main(exe: str) -> None:
         print("explore ok", flush=True)
     except SystemExit:
         proc.kill()
-        print("backend stderr (tail):\n" + "".join(stderr[-40:]), flush=True)
+        # A hang dumps every thread's stack each SFS_STACK_DUMP_SECONDS; show
+        # the whole of the last dump (the stuck thread can be anywhere in it).
+        text = "".join(stderr)
+        start = text.rfind("Timeout (")
+        print("backend stderr (last stack dump):\n" + text[start:] if start >= 0
+              else "backend stderr (tail):\n" + "".join(stderr[-40:]), flush=True)
         raise
 
     # ── shutdown when the shell goes away ──
