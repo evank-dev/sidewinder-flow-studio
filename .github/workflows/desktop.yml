@@ -8,6 +8,15 @@
 # Each job freezes the backend with PyInstaller, smoke-tests the frozen
 # backend, builds the Tauri app around it, then smoke-tests the copy of the
 # backend inside the built app (catches resource-copy problems).
+#
+# Signing is switched on by repository secrets; without them the build still
+# works, unsigned (see desktop/README.md → "Releases and signing"):
+#   updates   TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+#   macOS     APPLE_CERTIFICATE (base64 .p12), APPLE_CERTIFICATE_PASSWORD,
+#             APPLE_ID, APPLE_PASSWORD (app-specific), APPLE_TEAM_ID
+#   Windows   AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, plus the
+#             variables AZURE_SIGNING_ENDPOINT, AZURE_SIGNING_ACCOUNT,
+#             AZURE_SIGNING_PROFILE (Azure Trusted Signing)
 name: Desktop
 
 on:
@@ -27,6 +36,10 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
+    env:
+      UPDATER_SIGNING: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+      MAC_SIGNING: ${{ secrets.APPLE_CERTIFICATE != '' }}
+      WIN_SIGNING: ${{ secrets.AZURE_CLIENT_SECRET != '' && vars.AZURE_SIGNING_ACCOUNT != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -61,6 +74,12 @@ jobs:
           tag="${GITHUB_REF_NAME#v}"
           [ "$tag" = "$want" ] || [ "$tag.0" = "$want" ] || { echo "tag $GITHUB_REF_NAME != app $want"; exit 1; }
 
+      - name: Updater public key is set
+        if: runner.os == 'Linux' && env.UPDATER_SIGNING == 'true'
+        run: |
+          ! grep -q REPLACE_WITH_UPDATER_PUBLIC_KEY desktop/src-tauri/tauri.conf.json ||
+            { echo "Put the updater public key in tauri.conf.json → plugins.updater.pubkey"; exit 1; }
+
       # ── system packages ──
       - name: Linux build dependencies
         if: runner.os == 'Linux'
@@ -90,12 +109,44 @@ jobs:
           cache-dependency-path: backend/pyproject.toml
       - name: Install the backend, bundled plugins and PyInstaller
         run: python -m pip install "./backend[pushdown]" ./plugins/sfs-plugin-curvefit pyinstaller pytest
+      - name: macOS signing identity
+        if: runner.os == 'macOS' && env.MAC_SIGNING == 'true'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/sfs-signing.keychain-db"
+          pw="$(uuidgen)"
+          security create-keychain -p "$pw" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$pw" "$keychain"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          rm "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$pw" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          id="$(security find-identity -v -p codesigning "$keychain" | grep -o '"Developer ID Application[^"]*"' | head -1 | tr -d '"')"
+          [ -n "$id" ] || { echo "no Developer ID Application identity in APPLE_CERTIFICATE"; exit 1; }
+          echo "SFS_CODESIGN_IDENTITY=$id" >> "$GITHUB_ENV"      # PyInstaller signs the backend with it
+      - name: Windows signing tool
+        if: runner.os == 'Windows' && env.WIN_SIGNING == 'true'
+        run: cargo install trusted-signing-cli --locked
       - name: Desktop launcher tests (handshake, data directory)
         working-directory: backend
         run: python -m pytest -q tests/test_desktop.py
       - name: Freeze the backend
         working-directory: desktop/sidecar
         run: pyinstaller --noconfirm sfs-backend.spec
+      - name: Sign the backend executable (Windows)
+        if: runner.os == 'Windows' && env.WIN_SIGNING == 'true'
+        working-directory: desktop/sidecar
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        run: >
+          trusted-signing-cli -e "${{ vars.AZURE_SIGNING_ENDPOINT }}" -a "${{ vars.AZURE_SIGNING_ACCOUNT }}"
+          -c "${{ vars.AZURE_SIGNING_PROFILE }}" -d "Sidewinder Flow Studio" dist/sfs-backend/sfs-backend.exe
       - name: Smoke test the frozen backend
         working-directory: desktop/sidecar
         shell: bash
@@ -111,7 +162,42 @@ jobs:
         run: npm ci
       - name: Build the app and installers
         working-directory: desktop
-        run: npx tauri build
+        shell: bash
+        env:
+          UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          UPDATER_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          NOTARY_APPLE_ID: ${{ secrets.APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          SIGN_COMMAND: >-
+            trusted-signing-cli -e ${{ vars.AZURE_SIGNING_ENDPOINT }} -a ${{ vars.AZURE_SIGNING_ACCOUNT }}
+            -c ${{ vars.AZURE_SIGNING_PROFILE }} -d "Sidewinder Flow Studio" %1
+        run: |
+          # Signing settings layered over tauri.conf.json for this build only.
+          # Credentials are exported only when set: an empty APPLE_ID would
+          # still make Tauri try to notarise.
+          python - "$RUNNER_TEMP/ci.conf.json" <<'PY'
+          import json, os, sys
+          conf = {"bundle": {}}
+          if os.environ.get("UPDATER_SIGNING") == "true":
+              conf["bundle"]["createUpdaterArtifacts"] = True
+          if os.environ.get("SFS_CODESIGN_IDENTITY"):
+              conf["bundle"]["macOS"] = {"signingIdentity": os.environ["SFS_CODESIGN_IDENTITY"]}
+          if os.environ.get("WIN_SIGNING") == "true" and os.environ.get("RUNNER_OS") == "Windows":
+              conf["bundle"]["windows"] = {"signCommand": os.environ["SIGN_COMMAND"]}
+          json.dump(conf, open(sys.argv[1], "w"))
+          print(json.dumps(conf))
+          PY
+          if [ "$UPDATER_SIGNING" = true ]; then
+            export TAURI_SIGNING_PRIVATE_KEY="$UPDATER_KEY" TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$UPDATER_KEY_PASSWORD"
+          fi
+          if [ -n "$SFS_CODESIGN_IDENTITY" ] && [ -n "$NOTARY_APPLE_ID" ]; then
+            export APPLE_ID="$NOTARY_APPLE_ID" APPLE_PASSWORD="$NOTARY_PASSWORD" APPLE_TEAM_ID="$NOTARY_TEAM_ID"
+          fi
+          npx tauri build --config "$RUNNER_TEMP/ci.conf.json"
 
       - name: Smoke test the backend inside the built app
         shell: bash
@@ -120,11 +206,23 @@ jobs:
           [ -n "$exe" ] || { echo "backend not found in the built app"; exit 1; }
           python desktop/sidecar/smoke_test.py "$exe"
 
+      - name: Verify signatures (macOS)
+        if: runner.os == 'macOS' && env.MAC_SIGNING == 'true'
+        run: |
+          app="$(ls -d desktop/src-tauri/target/release/bundle/macos/*.app)"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          spctl --assess --type execute --verbose "$app"
+
       - name: Collect the installers
         shell: bash
         run: |
+          shopt -s nullglob
           mkdir out
-          for f in ${{ matrix.bundles }}; do cp "$f" "out/$(basename "$f" | tr ' ' '-')"; done
+          # installers, plus update packages and their signatures when built
+          for f in ${{ matrix.bundles }} desktop/src-tauri/target/release/bundle/*/*.sig \
+                   desktop/src-tauri/target/release/bundle/macos/*.app.tar.gz; do
+            cp "$f" "out/$(basename "$f" | tr ' ' '-')"
+          done
           ls -l out
 
       # ── publish ──
@@ -142,6 +240,34 @@ jobs:
         run: |
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 ||
             gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "$GITHUB_REF_NAME" \
-              --notes "Desktop installers (unsigned). Release notes to follow." ||
+              --notes "Desktop installers. Release notes to follow." ||
             gh release view "$GITHUB_REF_NAME" >/dev/null   # another job created it meanwhile
           gh release upload "$GITHUB_REF_NAME" out/* --clobber
+
+  # The updater manifest, once every platform has uploaded its packages. The
+  # app reads it from releases/latest/download/latest.json, so it is only
+  # offered once the draft release is published.
+  update-manifest:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Write and attach latest.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! ls assets/*.sig >/dev/null 2>&1; then
+            echo "No update signatures (TAURI_SIGNING_PRIVATE_KEY not set): no latest.json."
+            exit 0
+          fi
+          version="$(python3 -c "import json;print(json.load(open('desktop/src-tauri/tauri.conf.json'))['version'])")"
+          python3 desktop/scripts/latest_json.py assets "$version" \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME" \
+            "Release notes: https://github.com/$GITHUB_REPOSITORY/releases/tag/$GITHUB_REF_NAME"
+          cat assets/latest.json
+          gh release upload "$GITHUB_REF_NAME" assets/latest.json --clobber

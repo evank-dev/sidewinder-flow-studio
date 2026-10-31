@@ -80,6 +80,12 @@ a = Analysis(
     noarchive=False,
 )
 pyz = PYZ(a.pure)
+# macOS release builds: SFS_CODESIGN_IDENTITY (a Developer ID Application
+# identity in the keychain) signs the executable and every collected binary
+# with the hardened runtime, as notarisation requires. Unset: ad-hoc signing.
+codesign_identity = os.environ.get("SFS_CODESIGN_IDENTITY") or None
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="sfs-backend",
-          console=True, strip=False, upx=False)
+          console=True, strip=False, upx=False,
+          codesign_identity=codesign_identity,
+          entitlements_file=str(Path(SPECPATH) / "entitlements.plist") if codesign_identity else None)
 coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name="sfs-backend")
