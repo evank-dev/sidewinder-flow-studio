@@ -9,11 +9,12 @@
 # backend, builds the Tauri app around it, then smoke-tests the copy of the
 # backend inside the built app (catches resource-copy problems).
 #
+# macOS is paused (it needs the paid Apple Developer Program to be usable);
+# see desktop/README.md for what is already prepared.
+#
 # Signing is switched on by repository secrets; without them the build still
 # works, unsigned (see desktop/README.md → "Releases and signing"):
 #   updates   TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD
-#   macOS     APPLE_CERTIFICATE (base64 .p12), APPLE_CERTIFICATE_PASSWORD,
-#             APPLE_ID, APPLE_PASSWORD (app-specific), APPLE_TEAM_ID
 #   Windows   AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, plus the
 #             variables AZURE_SIGNING_ENDPOINT, AZURE_SIGNING_ACCOUNT,
 #             AZURE_SIGNING_PROFILE (Azure Trusted Signing)
@@ -38,7 +39,6 @@ jobs:
     timeout-minutes: 90
     env:
       UPDATER_SIGNING: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
-      MAC_SIGNING: ${{ secrets.APPLE_CERTIFICATE != '' }}
       WIN_SIGNING: ${{ secrets.AZURE_CLIENT_SECRET != '' && vars.AZURE_SIGNING_ACCOUNT != '' }}
     strategy:
       fail-fast: false
@@ -54,10 +54,6 @@ jobs:
             backend: desktop/src-tauri/target/release/sfs-backend/sfs-backend.exe
             bundles: desktop/src-tauri/target/release/bundle/nsis/*.exe
               desktop/src-tauri/target/release/bundle/msi/*.msi
-          - name: macOS arm64 (DMG)
-            os: macos-14
-            backend: desktop/src-tauri/target/release/bundle/macos/*.app/Contents/Resources/sfs-backend/sfs-backend
-            bundles: desktop/src-tauri/target/release/bundle/dmg/*.dmg
 
     steps:
       - uses: actions/checkout@v4
@@ -109,25 +105,6 @@ jobs:
           cache-dependency-path: backend/pyproject.toml
       - name: Install the backend, bundled plugins and PyInstaller
         run: python -m pip install "./backend[pushdown]" ./plugins/sfs-plugin-curvefit pyinstaller pytest
-      - name: macOS signing identity
-        if: runner.os == 'macOS' && env.MAC_SIGNING == 'true'
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-        run: |
-          keychain="$RUNNER_TEMP/sfs-signing.keychain-db"
-          pw="$(uuidgen)"
-          security create-keychain -p "$pw" "$keychain"
-          security set-keychain-settings -lut 21600 "$keychain"
-          security unlock-keychain -p "$pw" "$keychain"
-          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          security import "$RUNNER_TEMP/cert.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
-          rm "$RUNNER_TEMP/cert.p12"
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$pw" "$keychain" >/dev/null
-          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
-          id="$(security find-identity -v -p codesigning "$keychain" | grep -o '"Developer ID Application[^"]*"' | head -1 | tr -d '"')"
-          [ -n "$id" ] || { echo "no Developer ID Application identity in APPLE_CERTIFICATE"; exit 1; }
-          echo "SFS_CODESIGN_IDENTITY=$id" >> "$GITHUB_ENV"      # PyInstaller signs the backend with it
       - name: Windows signing tool
         if: runner.os == 'Windows' && env.WIN_SIGNING == 'true'
         run: cargo install trusted-signing-cli --locked
@@ -166,9 +143,6 @@ jobs:
         env:
           UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           UPDATER_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          NOTARY_APPLE_ID: ${{ secrets.APPLE_ID }}
-          NOTARY_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          NOTARY_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -177,15 +151,11 @@ jobs:
             -c ${{ vars.AZURE_SIGNING_PROFILE }} -d "Sidewinder Flow Studio" %1
         run: |
           # Signing settings layered over tauri.conf.json for this build only.
-          # Credentials are exported only when set: an empty APPLE_ID would
-          # still make Tauri try to notarise.
           python - "$RUNNER_TEMP/ci.conf.json" <<'PY'
           import json, os, sys
           conf = {"bundle": {}}
           if os.environ.get("UPDATER_SIGNING") == "true":
               conf["bundle"]["createUpdaterArtifacts"] = True
-          if os.environ.get("SFS_CODESIGN_IDENTITY"):
-              conf["bundle"]["macOS"] = {"signingIdentity": os.environ["SFS_CODESIGN_IDENTITY"]}
           if os.environ.get("WIN_SIGNING") == "true" and os.environ.get("RUNNER_OS") == "Windows":
               conf["bundle"]["windows"] = {"signCommand": os.environ["SIGN_COMMAND"]}
           json.dump(conf, open(sys.argv[1], "w"))
@@ -193,9 +163,6 @@ jobs:
           PY
           if [ "$UPDATER_SIGNING" = true ]; then
             export TAURI_SIGNING_PRIVATE_KEY="$UPDATER_KEY" TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$UPDATER_KEY_PASSWORD"
-          fi
-          if [ -n "$SFS_CODESIGN_IDENTITY" ] && [ -n "$NOTARY_APPLE_ID" ]; then
-            export APPLE_ID="$NOTARY_APPLE_ID" APPLE_PASSWORD="$NOTARY_PASSWORD" APPLE_TEAM_ID="$NOTARY_TEAM_ID"
           fi
           npx tauri build --config "$RUNNER_TEMP/ci.conf.json"
 
@@ -206,21 +173,13 @@ jobs:
           [ -n "$exe" ] || { echo "backend not found in the built app"; exit 1; }
           python desktop/sidecar/smoke_test.py "$exe"
 
-      - name: Verify signatures (macOS)
-        if: runner.os == 'macOS' && env.MAC_SIGNING == 'true'
-        run: |
-          app="$(ls -d desktop/src-tauri/target/release/bundle/macos/*.app)"
-          codesign --verify --deep --strict --verbose=2 "$app"
-          spctl --assess --type execute --verbose "$app"
-
       - name: Collect the installers
         shell: bash
         run: |
           shopt -s nullglob
           mkdir out
           # installers, plus update packages and their signatures when built
-          for f in ${{ matrix.bundles }} desktop/src-tauri/target/release/bundle/*/*.sig \
-                   desktop/src-tauri/target/release/bundle/macos/*.app.tar.gz; do
+          for f in ${{ matrix.bundles }} desktop/src-tauri/target/release/bundle/*/*.sig; do
             cp "$f" "out/$(basename "$f" | tr ' ' '-')"
           done
           ls -l out
