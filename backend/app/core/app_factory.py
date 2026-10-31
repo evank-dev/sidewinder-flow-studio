@@ -45,7 +45,7 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Sidewinder Flow Studio API",
-        version="1.28",
+        version="1.30",
         description="Visual Python notebook DAG with scheduling",
         lifespan=lifespan,
     )
@@ -69,8 +69,9 @@ def create_app() -> FastAPI:
     app.include_router(explore.router,     prefix="/api/explore",     tags=["explore"])
     app.include_router(ws.router,          prefix="/ws",              tags=["websocket"])
 
-    # Single-container mode: serve built React as static files
-    static_dir = Path(__file__).parent.parent / "static"
+    # Single-container and desktop mode: serve the built React app. The
+    # default is backend/static (next to main.py); STATIC_DIR overrides it.
+    static_dir = Path(os.getenv("STATIC_DIR") or Path(__file__).resolve().parents[2] / "static")
     if os.getenv("SERVE_STATIC", "false").lower() == "true" and static_dir.exists():
         assets_dir = static_dir / "assets"
         if assets_dir.exists():
