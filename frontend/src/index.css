@@ -4,6 +4,18 @@
 
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }
+  /* The app is dark-only: native controls (selects, scrollbars, date pickers)
+     follow it. WebKitGTK (desktop on Linux) otherwise draws <select> with the
+     light GTK theme and ignores its background, leaving light text on white. */
+  :root { color-scheme: dark; }
+  select {
+    -webkit-appearance: none; appearance: none;
+    background-color: theme('colors.canvas.bg');
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2394a3b8' stroke-width='1.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 0.6rem center;
+    padding-right: 1.75rem !important;
+  }
+  select option, select optgroup { background-color: #111827; color: #e2e8f0; }
   body { @apply bg-canvas-bg text-slate-100 font-sans; margin: 0; -webkit-font-smoothing: antialiased; }
 
   /* React Flow */
