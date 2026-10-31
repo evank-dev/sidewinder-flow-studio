@@ -2,13 +2,24 @@
  * AboutDialog — short description of SFS, version, and credits.
  * Opened by clicking the SFS logo in the top bar.
  */
-import { useEffect, useRef } from 'react'
-import { X, GitBranch, Zap, Database, Sparkles } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { X, GitBranch, Zap, Database, Sparkles, HardDrive } from 'lucide-react'
+import { useFeatures } from '@/utils/engines'
+import { api, type DesktopInfo } from '@/utils/api'
+import { DataLocations } from '@/components/desktop/DataLocations'
 
-export const SFS_VERSION = '1.31'
+export const SFS_VERSION = '1.32'
 
 export function AboutDialog({ onClose }: { onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null)
+  const { desktop } = useFeatures()
+  const [info, setInfo] = useState<DesktopInfo | null>(null)
+  useEffect(() => { if (desktop) api.desktop.info().then(setInfo).catch(() => {}) }, [desktop])
+  const showWelcome = async () => {
+    await api.desktop.showWelcomeAgain().catch(() => {})
+    onClose()
+    window.dispatchEvent(new Event('sfs:show-welcome'))
+  }
 
   useEffect(() => {
     const handler = (e: MouseEvent | KeyboardEvent) => {
@@ -28,7 +39,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-[9998] bg-black/60 flex items-center justify-center p-4">
       <div
         ref={ref}
-        className="w-full max-w-md bg-surface-raised border border-canvas-border rounded-2xl shadow-node p-6 space-y-4"
+        className={`w-full ${info ? 'max-w-xl' : 'max-w-md'} bg-surface-raised border border-canvas-border rounded-2xl shadow-node p-6 space-y-4`}
       >
         {/* Header */}
         <div className="flex items-start gap-3">
@@ -70,6 +81,19 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
             <span>Cron scheduling, encrypted connections, live row counts, tables and charts inline</span>
           </div>
         </div>
+
+        {/* Desktop edition: where is my data */}
+        {info && (
+          <div className="pt-3 border-t border-canvas-border space-y-2">
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-200">
+              <HardDrive size={14} className="text-accent" /> Where is my data
+            </div>
+            <DataLocations info={info} />
+            <button className="text-xs text-accent hover:underline" onClick={showWelcome}>
+              Show the welcome screen again
+            </button>
+          </div>
+        )}
 
         {/* Footer */}
         <div className="pt-2 border-t border-canvas-border flex items-center justify-between text-xs text-subtle">

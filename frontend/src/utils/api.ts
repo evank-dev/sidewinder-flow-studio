@@ -145,4 +145,25 @@ export const api = {
     deleteProvider: (id: string) =>
       req<void>(`/agent/providers/${id}`, { method: 'DELETE' }),
   },
+  // Desktop edition only (features.desktop): data locations, first run, logs
+  desktop: {
+    info: () => req<DesktopInfo>('/desktop/'),
+    welcomeSeen: () => req<void>('/desktop/welcome-seen', { method: 'POST' }),
+    showWelcomeAgain: () => req<void>('/desktop/welcome-seen', { method: 'DELETE' }),
+    log: (name: string) =>
+      req<{ name: string; size: number; truncated: boolean; text: string }>(`/desktop/logs/${encodeURIComponent(name)}`),
+    open: (folder: 'data' | 'projects' | 'logs') =>
+      req<void>('/desktop/open', { method: 'POST', body: JSON.stringify({ folder }) }),
+  },
+}
+
+export interface DesktopInfo {
+  version: string
+  data_dir: string
+  projects_dir: string
+  logs_dir: string
+  secret_key: string
+  database: string
+  logs: { name: string; size: number }[]
+  welcome_seen: boolean
 }

@@ -3,9 +3,10 @@
 The installable, single-user edition of Sidewinder Flow Studio: no Docker, no
 terminal, no Python install. Same repository and code as the server edition.
 
-**Status: Phase 2.** Built for Linux, Windows and macOS (Apple Silicon) in CI,
-with self-updates and code signing wired in (each switched on by repository
-secrets, see "Releases and signing"). The first-run screen comes next.
+**Status: Phase 3.** Built for Linux and Windows in CI (macOS paused, see
+below), with self-updates, code signing (switched on by repository secrets, see
+"Releases and signing") and a first-run welcome screen. The download page comes
+next.
 
 ## How it works
 
@@ -30,16 +31,41 @@ the window loads http://127.0.0.1:<n>/   (same origin as the API and WebSocket)
   backend fails, the page shows the error and the end of the log. A second
   launch focuses the running window.
 - Data lives in the OS app-data directory (Linux:
-  `~/.local/share/dev.sidewinderlabs.flowstudio/`): `projects/`, `frame_cache/`,
-  `flow_studio.db`, `secret.key`, and `logs/backend.log`. **Back up
-  `secret.key`**: it encrypts saved connection passwords.
+  `~/.local/share/dev.sidewinderlabs.flowstudio/`, Windows:
+  `%APPDATA%\dev.sidewinderlabs.flowstudio\`): `projects/`, `frame_cache/`,
+  `flow_studio.db` (connections, run history), `secret.key`, `logs/`, and an
+  optional `.env`. **Back up `secret.key`**: it encrypts saved connection
+  passwords. Uninstalling leaves this folder in place.
+
+## First run, data and logs
+
+- On first launch a welcome screen offers the sample project (*Sales pipeline
+  (CSV)*, built into SFS: pandas → DuckDB → Polars → chart, table and Explore),
+  a curve-fitting example, or an empty project, and shows where data lives and
+  which file to back up. Closing it writes `.welcome_seen` in the data folder;
+  About → *Show the welcome screen again* removes it.
+- About (click the FS logo) → *Where is my data*: the folders with *Open*
+  buttons (the backend opens them in the system file manager) and the logs,
+  readable in the app.
+- Logs, in `logs/`, each rotated to `<name>.1` past 5 MB:
+  - `backend.log`: the backend's output; a header per session, warnings and
+    errors with timestamps, Python tracebacks, and native crashes (faulthandler).
+  - `shell.log`: the window's own problems: panics, a backend that failed to
+    start or stopped mid-session. When the backend stops unexpectedly the app
+    says so and offers *Restart*.
+  - `update.log`: update checks.
+- `/api/desktop` (mounted only in the desktop edition) serves all of this.
 
 ## CI
 
-`.github/workflows/desktop.yml` builds every platform: Linux x64 (AppImage,
-.deb, on Ubuntu 22.04 for an older glibc), Windows x64 (NSIS, MSI) and macOS
-arm64 (DMG). Run it from the Actions tab (installers attached to the run), or
-push a `v*` tag (installers also go to a draft release for that tag).
+`.github/workflows/desktop.yml` builds Linux x64 (AppImage and .deb, on Ubuntu
+22.04 for an older glibc) and Windows x64 (NSIS and MSI). It runs in two ways:
+
+- **By hand:** GitHub → Actions → *Desktop* → *Run workflow* → branch `main`
+  → *Run workflow*. About 30–45 minutes; the installers are then under
+  *Artifacts* at the bottom of the run's page (a zip per platform).
+- **On a tag:** `git tag v1.32 && git push origin v1.32`. The same, and the
+  installers and `latest.json` go to a draft release for that tag.
 
 Each job runs the launcher tests, freezes the backend, and runs
 `sidecar/smoke_test.py` twice: on the frozen backend, then on the copy inside
@@ -48,9 +74,7 @@ available, runs a flow through pandas, DuckDB, Polars and SQL, compiles an
 Explore query, and checks the backend exits when stdin closes.
 
 Platform settings live in `tauri.windows.conf.json` and `tauri.macos.conf.json`,
-which Tauri merges over `tauri.conf.json`. Without an Apple certificate, macOS
-builds are ad-hoc signed (`signingIdentity: "-"`) so they run on Apple Silicon,
-but the first launch needs right-click → Open.
+which Tauri merges over `tauri.conf.json`.
 
 ## Updates
 
@@ -66,7 +90,7 @@ app.
 - `latest.json` is written by CI (`scripts/latest_json.py`) and attached to the
   draft release. `releases/latest` only points at published releases, so
   nothing is offered until you publish the draft.
-- Updatable: the AppImage, both Windows installers, the macOS app. A `.deb`
+- Updatable: the AppImage and both Windows installers. A `.deb`
   install is left to the package manager (no check).
 - `SFS_NO_UPDATE_CHECK=1` turns the check off; `SFS_AUTO_UPDATE=1` installs
   without asking (managed machines).
@@ -142,8 +166,6 @@ Actions secret, and an offline backup in your password manager.
 | Secret | What | If lost |
 |---|---|---|
 | `TAURI_SIGNING_PRIVATE_KEY`, `…_PASSWORD` | updater key (minisign) | installed apps can no longer update; users must reinstall once |
-| `APPLE_CERTIFICATE`, `…_PASSWORD` | Developer ID Application certificate, `.p12`, base64 | revoke and re-issue in the Apple Developer account |
-| `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | notarisation (app-specific password, not the account password) | create a new app-specific password |
 | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` | Azure Trusted Signing service principal | rotate the client secret in Azure |
 
 The updater key matters most: its public half is compiled into every installed
@@ -158,17 +180,30 @@ npx tauri signer generate -w ~/.tauri/sfs-updater.key   # asks for a password
 Put the contents of `~/.tauri/sfs-updater.key.pub` in `tauri.conf.json` →
 `plugins.updater.pubkey` (public, safe to commit), and the private key file's
 contents and password in the two `TAURI_SIGNING_…` secrets. CI refuses to build
-signed updates while the placeholder public key is still there.
+signed updates while the placeholder public key is still there. (Done for
+Sidewinder Labs: the key was generated on 2026-10-31.)
 
-### macOS: Developer ID and notarisation
+### macOS (paused)
 
-Needs the Apple Developer Program (99 USD/year). Create a *Developer ID
-Application* certificate, export it with its key as `.p12`, and store
-`base64 -i cert.p12` as `APPLE_CERTIFICATE`. CI then signs every binary in the
-backend with the hardened runtime (`sidecar/entitlements.plist`: JIT for
-wasmtime, unsigned executable memory, no library validation), signs and
-notarises the app with Tauri, and checks the result with `codesign --verify`
-and `spctl`. Not yet tested: first run needs the certificate.
+Not built until there is demand. An unsigned macOS app is blocked by
+Gatekeeper on most Macs (users must find the override in System Settings), and
+signing plus notarisation needs the Apple Developer Program (99 USD/year).
+
+Already prepared, for when it comes back:
+
+- `tauri.macos.conf.json`: DMG and .app targets, macOS 11+, ad-hoc signing.
+- `sidecar/entitlements.plist` and `SFS_CODESIGN_IDENTITY` in the spec: sign
+  every backend binary with the hardened runtime, as notarisation requires
+  (JIT for wasmtime, unsigned executable memory, no library validation).
+- `scripts/latest_json.py` already maps `.app.tar.gz` update packages.
+
+To restore it: add a `macos-14` entry to the workflow matrix (backend at
+`bundle/macos/*.app/Contents/Resources/sfs-backend/sfs-backend`, bundles
+`bundle/dmg/*.dmg` and `bundle/macos/*.app.tar.gz`), import a Developer ID
+certificate into a keychain before freezing (setting `SFS_CODESIGN_IDENTITY`),
+pass its identity as `bundle.macOS.signingIdentity`, and export `APPLE_ID`,
+`APPLE_PASSWORD` and `APPLE_TEAM_ID` for notarisation. The workflow in git
+history before macOS was paused has all of these steps.
 
 ### Windows: options
 

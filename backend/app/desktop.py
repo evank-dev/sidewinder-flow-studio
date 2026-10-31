@@ -60,6 +60,7 @@ def desktop_environment(data_dir: Path, environ: dict | None = None) -> dict[str
         "DEBUG": "false",
         "HOST": "127.0.0.1",
         "SFS_DESKTOP": "1",
+        "SFS_DATA_DIR": str(data_dir),
         # Optional settings file (e.g. ANTHROPIC_API_KEY); never the .env of
         # the folder the app happened to be launched from.
         "SFS_ENV_FILE": str(data_dir / ".env"),
@@ -99,6 +100,22 @@ def _exit_when_stdin_closes(server) -> None:
     threading.Thread(target=watch, name="sfs-stdin-watch", daemon=True).start()
 
 
+def _log_to_stderr() -> None:
+    """stderr is the shell's logs/backend.log: start each session with a
+    header, timestamp warnings and errors, and dump native crashes (a segfault
+    in a data library) with their Python stack."""
+    import faulthandler
+    import logging
+    import platform
+    import time
+
+    print(f"\n=== SFS backend starting {time.strftime('%Y-%m-%d %H:%M:%S')} "
+          f"(Python {platform.python_version()}, {platform.platform()}) ===", file=sys.stderr, flush=True)
+    logging.basicConfig(level=logging.WARNING, stream=sys.stderr,
+                        format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    faulthandler.enable(file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="sfs-backend", description="SFS desktop backend")
     parser.add_argument("--data-dir", required=True, type=Path, help="app data directory")
@@ -109,6 +126,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Settings are read when app.core.config is imported, so set them first.
     os.environ.update(desktop_environment(args.data_dir))
+    _log_to_stderr()
 
     import asyncio
 

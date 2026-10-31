@@ -16,7 +16,7 @@ from app import desktop
 
 BACKEND = Path(__file__).resolve().parents[1]
 SETTINGS_VARS = ("PROJECTS_DIR", "FRAME_CACHE_DIR", "REPORTS_DIR", "PERSIST_DB", "METADATA_DB_URL",
-                 "SECRET_KEY", "SERVE_STATIC", "STATIC_DIR", "DEBUG", "HOST", "SFS_DESKTOP", "SFS_ENV_FILE")
+                 "SECRET_KEY", "SERVE_STATIC", "STATIC_DIR", "DEBUG", "HOST", "SFS_DESKTOP", "SFS_ENV_FILE", "SFS_DATA_DIR")
 
 
 def test_data_dirs_point_into_the_data_dir(tmp_path):
@@ -104,6 +104,10 @@ def test_handshake_serves_app_and_api_then_exits_on_stdin_eof(launched):
     caps = json.load(urllib.request.urlopen(f"http://127.0.0.1:{port}/api/capabilities/", timeout=10))
     assert any(e["name"] == "pandas" for e in caps["engines"])
     assert b'id="root"' in urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=10).read()
+    assert b'id="root"' in urllib.request.urlopen(f"http://127.0.0.1:{port}/some/client/route", timeout=10).read()
+    with pytest.raises(urllib.error.HTTPError) as unknown_api:     # not the app's index page
+        urllib.request.urlopen(f"http://127.0.0.1:{port}/api/no-such-endpoint", timeout=10)
+    assert unknown_api.value.code == 404
     assert (data / "projects").is_dir() and (data / "frame_cache").is_dir()
     assert (data / desktop.SECRET_KEY_FILE).exists()
 
@@ -124,3 +128,62 @@ def test_desktop_hides_reports(launched):
     port = int(line.strip().split("port=")[1])
     caps = json.load(urllib.request.urlopen(f"http://127.0.0.1:{port}/api/capabilities/", timeout=10))
     assert caps["features"]["desktop"] is True and caps["features"]["reports"] is False
+
+
+def _call(port, path, method="GET"):
+    req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method, data=b"" if method != "GET" else None)
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            body = r.read()
+            return r.status, json.loads(body) if body else None
+    except urllib.error.HTTPError as e:
+        return e.code, None
+
+
+def test_desktop_info_welcome_and_logs(launched):
+    proc, line, data = launched
+    port = int(line.strip().split("port=")[1])
+
+    status, info = _call(port, "/api/desktop/")
+    assert status == 200
+    assert info["data_dir"] == str(data.resolve())
+    assert info["secret_key"] == str(data.resolve() / desktop.SECRET_KEY_FILE)
+    assert info["welcome_seen"] is False and info["logs"] == []
+
+    # first run is over once the welcome screen is closed; it can be shown again
+    assert _call(port, "/api/desktop/welcome-seen", "POST")[0] == 204
+    assert _call(port, "/api/desktop/")[1]["welcome_seen"] is True
+    assert _call(port, "/api/desktop/welcome-seen", "DELETE")[0] == 204
+    assert _call(port, "/api/desktop/")[1]["welcome_seen"] is False
+
+    # logs are read by name only, never by path
+    (data / "logs").mkdir()
+    (data / "logs" / "backend.log").write_text("x" * 10 + "last line\n")
+    assert [l["name"] for l in _call(port, "/api/desktop/")[1]["logs"]] == ["backend.log"]
+    status, log = _call(port, "/api/desktop/logs/backend.log")
+    assert status == 200 and log["text"].endswith("last line\n") and not log["truncated"]
+    for bad in ("..%2Fsecret.key", "secret.key", "%2Fetc%2Fpasswd"):
+        assert _call(port, f"/api/desktop/logs/{bad}")[0] == 404, bad
+
+
+def test_launch_environment_drops_bundle_paths(monkeypatch):
+    from app.api.desktop import _launch_environment
+
+    monkeypatch.setenv("APPDIR", "/tmp/.mount_x")
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/bundle/_internal")
+    monkeypatch.setenv("LD_LIBRARY_PATH_ORIG", "/usr/local/lib")
+    monkeypatch.setenv("XDG_DATA_DIRS", "/tmp/.mount_x/usr/share:/usr/share")
+    monkeypatch.setenv("GIO_MODULE_DIR", "/tmp/.mount_x/usr/lib/gio")
+    env = _launch_environment()
+    assert env["LD_LIBRARY_PATH"] == "/usr/local/lib" and "LD_LIBRARY_PATH_ORIG" not in env
+    assert env["XDG_DATA_DIRS"] == "/usr/share"
+    assert "GIO_MODULE_DIR" not in env and "APPDIR" not in env
+
+
+def test_server_edition_has_no_desktop_api(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app.core.app_factory import create_app
+
+    monkeypatch.delenv("SFS_DESKTOP", raising=False)
+    client = TestClient(create_app())
+    assert client.get("/api/desktop/").status_code in (404, 405)

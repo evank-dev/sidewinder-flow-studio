@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { TopBar }     from '@/components/ui/TopBar'
 import { Canvas }     from '@/components/canvas/Canvas'
 import { NodeToolbar }from '@/components/canvas/NodeToolbar'
@@ -7,6 +7,9 @@ import { useStore }   from '@/store'
 import { useFlowWebSocket } from '@/hooks/useFlowWebSocket'
 import type { WsEvent } from '@/types'
 import { sourceFromHash } from '@/components/explore/source'
+import { DesktopWelcome } from '@/components/desktop/DesktopWelcome'
+import { useFeatures } from '@/utils/engines'
+import { api, type DesktopInfo } from '@/utils/api'
 
 // Graphic Walker is ~4 MB: load it only when Explore is opened.
 const ExploreView = lazy(() => import('@/components/explore/ExploreView'))
@@ -57,6 +60,17 @@ export default function App() {
     if (window.location.hash.startsWith('#/explore')) openExplore(sourceFromHash(window.location.hash))
   }, [])
 
+  // Desktop edition: the welcome screen until the user has closed it once
+  const { desktop } = useFeatures()
+  const [welcome, setWelcome] = useState<DesktopInfo | null>(null)
+  useEffect(() => {
+    if (!desktop) return
+    const check = () => api.desktop.info().then((i) => { if (!i.welcome_seen) setWelcome(i) }).catch(() => {})
+    check()
+    window.addEventListener('sfs:show-welcome', check)
+    return () => window.removeEventListener('sfs:show-welcome', check)
+  }, [desktop])
+
   // Ctrl+S to save
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -72,6 +86,7 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden">
       <TopBar />
+      {welcome && <DesktopWelcome info={welcome} onClose={() => setWelcome(null)} />}
       {view === 'explore' && (
         <Suspense fallback={<div className="flex-1 p-6 text-sm text-muted">Loading Explore…</div>}>
           <ExploreView />

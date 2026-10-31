@@ -5,8 +5,9 @@
 Starts the executable the way the desktop shell does, waits for the readiness
 line, then checks what can only break in a frozen build: the frontend is
 served, every bundled engine is available, a flow runs through pandas, DuckDB,
-Polars and the SQL engine (SQLGlot, on SQLite), and Explore compiles a chart
-query (the wasmtime native library). Finally it closes stdin, as the shell does
+Polars and the SQL engine (SQLGlot, on SQLite), the sample project runs (its
+CSV is bundled data), and Explore compiles a chart query (the wasmtime native
+library). Finally it closes stdin, as the shell does
 on exit, and expects the backend to stop. Standard library only, so CI can run
 it with any Python.
 """
@@ -122,6 +123,25 @@ def main(exe: str) -> None:
         if call(f"/api/execute/frame/{pid}/sql")["rows"] != [{"answer": 42}]:
             fail("SQL engine result is wrong")
         print(f"flow ok in {runs[0]['duration_ms']} ms (pandas, DuckDB, Polars, SQL)", flush=True)
+
+        # ── first run: desktop info, and the sample project (its CSV is bundled data) ──
+        info = call("/api/desktop/")
+        if info["welcome_seen"] or not info["secret_key"].endswith("secret.key"):
+            fail(f"unexpected desktop info: {info}")
+        sample = call("/api/projects/from-example", {"example": "Sales pipeline (CSV)"})
+        sflow = sample["flows"][0]
+        call("/api/execute/run", {"project_id": sample["id"], "flow_id": sflow["id"], "flow_state": sflow})
+        deadline = time.monotonic() + RUN_TIMEOUT
+        while time.monotonic() < deadline:
+            sruns = call(f"/api/runs/?project_id={sample['id']}")
+            if sruns and sruns[0]["status"] != "running":
+                break
+            time.sleep(0.5)
+        else:
+            fail("sample project did not finish")
+        if sruns[0]["status"] != "ok":
+            fail(f"sample project {sruns[0]['status']}: {sruns[0].get('error')}")
+        print(f"sample project ok in {sruns[0]['duration_ms']} ms", flush=True)
 
         # ── Explore: chart query compiled by the WASM module ──
         q = {"workflow": [{"type": "view", "query": [{"op": "aggregate", "groupBy": ["g"], "measures": [

@@ -29,6 +29,7 @@ def add_all(pkg):
 
 # SFS itself: routers, engines and services are partly imported lazily.
 hiddenimports += collect_submodules("app")
+datas += collect_data_files("app.examples")             # sample data read as files
 
 # Server stack chosen at run time by uvicorn / SQLAlchemy.
 hiddenimports += collect_submodules("uvicorn")
