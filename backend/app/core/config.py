@@ -1,3 +1,5 @@
+import os
+
 from pydantic_settings import BaseSettings
 from typing import List
 
@@ -47,7 +49,9 @@ class Settings(BaseSettings):
     ]
 
     class Config:
-        env_file = ".env"
+        # The desktop edition points this at its data directory, so a .env in
+        # whatever folder the app was launched from is never read.
+        env_file = os.getenv("SFS_ENV_FILE", ".env")
         env_file_encoding = "utf-8"
 
 
