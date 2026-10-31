@@ -272,6 +272,10 @@ def load_plugins() -> list[dict]:
         return _LOADED_PLUGINS
     _PLUGINS_LOADED = True
 
+    # SFS's own examples first, so they lead the picker's list
+    from app import examples
+    examples.register()
+
     try:
         eps = metadata.entry_points(group=ENTRY_POINT_GROUP)
     except Exception as exc:                     # pragma: no cover

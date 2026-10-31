@@ -1,0 +1,234 @@
+date,region,product,quantity,unit_price
+2026-01-05,North,Pen set,19,6.0
+2026-01-05,North,Calculator,17,18.5
+2026-01-05,North,Desk lamp,18,27.0
+2026-01-05,South,Notebook,15,3.5
+2026-01-05,East,Backpack,21,39.0
+2026-01-05,East,Calculator,14,18.5
+2026-01-05,West,Notebook,21,3.5
+2026-01-05,West,Backpack,18,39.0
+2026-01-05,West,Calculator,9,18.5
+2026-01-12,North,Pen set,15,6.0
+2026-01-12,North,Backpack,15,39.0
+2026-01-12,North,Desk lamp,11,27.0
+2026-01-12,South,Backpack,16,39.0
+2026-01-12,South,Desk lamp,9,27.0
+2026-01-12,East,Notebook,22,3.5
+2026-01-12,East,Pen set,30,6.0
+2026-01-12,East,Calculator,12,18.5
+2026-01-12,West,Backpack,17,39.0
+2026-01-12,West,Calculator,14,18.5
+2026-01-12,West,Desk lamp,8,27.0
+2026-01-19,north,Notebook,13,3.5
+2026-01-19,North,Backpack,11,39.0
+2026-01-19,North,Calculator,13,18.5
+2026-01-19,North,Desk lamp,10,27.0
+2026-01-19,South,Desk lamp,11,27.0
+2026-01-19,East,Notebook,26,3.5
+2026-01-19,East,Pen set,19,6.0
+2026-01-19,East,Backpack,29,39.0
+2026-01-19,East,Calculator,16,18.5
+2026-01-19,West,Pen set,13,6.0
+2026-01-26,north,Notebook,17,3.5
+2026-01-26,North,Backpack,18,39.0
+2026-01-26,North,Calculator,13,18.5
+2026-01-26,South,Notebook,14,3.5
+2026-01-26,South,Pen set,15,6.0
+2026-01-26,South,Calculator,14,18.5
+2026-01-26,South,Desk lamp,10,27.0
+2026-01-26,East,Notebook,25,3.5
+2026-01-26,East,Pen set,27,6.0
+2026-01-26,East,Desk lamp,20,27.0
+2026-01-26,West,Notebook,14,3.5
+2026-01-26,West,Desk lamp,12,27.0
+2026-02-02,North,Backpack,12,39.0
+2026-02-02,North,Desk lamp,17,27.0
+2026-02-02,South,Pen set,12,6.0
+2026-02-02,East,Pen set,10,6.0
+2026-02-02,East,Backpack,16,39.0
+2026-02-02,East,Desk lamp,14,27.0
+2026-02-02,West,Notebook,7,3.5
+2026-02-02,West,Backpack,11,39.0
+2026-02-02,West,Calculator,10,18.5
+2026-02-09,North,Calculator,8,18.5
+2026-02-09,North,Desk lamp,12,27.0
+2026-02-09,South,Backpack,9,39.0
+2026-02-09,East,Pen set,13,6.0
+2026-02-09,East,Desk lamp,14,27.0
+2026-02-09,West,Notebook,7,3.5
+2026-02-09,West,Desk lamp,14,27.0
+2026-02-16,North,Notebook,12,3.5
+2026-02-16,North,Calculator,16,18.5
+2026-02-16,North,Desk lamp,11,27.0
+2026-02-16,South,Notebook,14,3.5
+2026-02-16,South,Backpack,6,39.0
+2026-02-16,South,Desk lamp,10,27.0
+2026-02-16,East,Notebook,10,3.5
+2026-02-16,East,Calculator,14,18.5
+2026-02-16,West,Backpack,12,39.0
+2026-02-16,West,Calculator,9,18.5
+2026-02-23,North,Notebook,14,3.5
+2026-02-23,North,Pen set,13,6.0
+2026-02-23,South,Backpack,9,39.0
+2026-02-23,South,Calculator,5,18.5
+2026-02-23,South,Desk lamp,7,27.0
+2026-02-23,East,Pen set,,6.0
+2026-02-23,East,Backpack,12,39.0
+2026-02-23,East,Desk lamp,14,27.0
+2026-02-23,West,Calculator,8,18.5
+2026-02-23,West,Desk lamp,19,27.0
+2026-03-02,North,Pen set,10,6.0
+2026-03-02,North,Backpack,14,39.0
+2026-03-02,North,Desk lamp,12,27.0
+2026-03-02,South,Backpack,6,39.0
+2026-03-02,South,Calculator,10,18.5
+2026-03-02,East,Notebook,9,3.5
+2026-03-02,East,Backpack,18,39.0
+2026-03-02,West,Pen set,9,6.0
+2026-03-09,North,Pen set,11,6.0
+2026-03-09,North,Backpack,9,39.0
+2026-03-09,North,Calculator,,18.5
+2026-03-09,South,Pen set,16,6.0
+2026-03-09,South,Backpack,12,39.0
+2026-03-09,South,Desk lamp,16,27.0
+2026-03-09,East,Notebook,16,3.5
+2026-03-09,West,Pen set,13,6.0
+2026-03-09,West,Calculator,10,18.5
+2026-03-16,North,Notebook,9,3.5
+2026-03-16,North,Backpack,8,39.0
+2026-03-16,North,Calculator,11,18.5
+2026-03-16,South,Pen set,15,6.0
+2026-03-16,South,Desk lamp,18,27.0
+2026-03-16,East,Notebook,13,3.5
+2026-03-16,East,Calculator,21,18.5
+2026-03-16,East,Desk lamp,21,27.0
+2026-03-16,West,Pen set,16,6.0
+2026-03-16,West,Backpack,11,39.0
+2026-03-16,West,Calculator,11,18.5
+2026-03-23,South,Pen set,17,6.0
+2026-03-23,South,Calculator,9,18.5
+2026-03-23,South,Desk lamp,15,27.0
+2026-03-23,East,Pen set,16,6.0
+2026-03-23,West,Notebook,14,3.5
+2026-03-23,West,Pen set,11,6.0
+2026-03-23,West,Desk lamp,13,27.0
+2026-03-30,North,Notebook,9,3.5
+2026-03-30,North,Backpack,18,39.0
+2026-03-30,North,Calculator,20,18.5
+2026-03-30,South,Notebook,15,3.5
+2026-03-30,South,Backpack,7,39.0
+2026-03-30,South,Calculator,15,18.5
+2026-03-30,South,Desk lamp,6,27.0
+2026-03-30,East,Notebook,11,3.5
+2026-03-30,East,Backpack,13,39.0
+2026-03-30,East,Calculator,14,18.5
+2026-03-30,West,Backpack,12,39.0
+2026-04-06,North,Pen set,17,6.0
+2026-04-06,North,Calculator,22,18.5
+2026-04-06,South,Pen set,11,6.0
+2026-04-06,South,Calculator,8,18.5
+2026-04-06,East,Pen set,11,6.0
+2026-04-06,East,Desk lamp,15,27.0
+2026-04-06,West,Notebook,10,3.5
+2026-04-06,West,Pen set,13,6.0
+2026-04-06,West,Backpack,10,39.0
+2026-04-06,West,Desk lamp,6,27.0
+2026-04-13,North,Notebook,11,3.5
+2026-04-13,North,Calculator,13,18.5
+2026-04-13,South,Pen set,11,6.0
+2026-04-13,South,Backpack,8,39.0
+2026-04-13,East,Pen set,12,6.0
+2026-04-13,West,Backpack,20,39.0
+2026-04-13,West,Desk lamp,10,27.0
+2026-04-20,North,Pen set,14,6.0
+2026-04-20,North,Calculator,11,18.5
+2026-04-20,North,Desk lamp,16,27.0
+2026-04-20,South,Notebook,11,3.5
+2026-04-20,South,Pen set,13,6.0
+2026-04-20,South,Backpack,7,39.0
+2026-04-20,East,Notebook,13,3.5
+2026-04-20,East,Pen set,23,6.0
+2026-04-20,East,Backpack,11,39.0
+2026-04-20,West,Notebook,13,3.5
+2026-04-20,west,Pen set,6,6.0
+2026-04-20,West,Backpack,11,39.0
+2026-04-20,West,Calculator,15,18.5
+2026-04-20,West,Desk lamp,16,27.0
+2026-04-27,North,Pen set,13,6.0
+2026-04-27,North,Calculator,14,18.5
+2026-04-27,South,Notebook,9,3.5
+2026-04-27,South,Pen set,5,6.0
+2026-04-27,South,Desk lamp,6,27.0
+2026-04-27,East,Pen set,22,6.0
+2026-04-27,West,Pen set,4,6.0
+2026-04-27,West,Backpack,9,39.0
+2026-04-27,West,Calculator,12,18.5
+2026-05-04,North,Notebook,9,3.5
+2026-05-04,North,Pen set,12,6.0
+2026-05-04,North,Backpack,10,39.0
+2026-05-04,South,Notebook,8,3.5
+2026-05-04,South,Backpack,12,39.0
+2026-05-04,South,Calculator,12,18.5
+2026-05-04,West,Pen set,6,6.0
+2026-05-04,West,Calculator,15,18.5
+2026-05-04,West,Desk lamp,8,27.0
+2026-05-11,North,Desk lamp,,27.0
+2026-05-11,South,Notebook,9,3.5
+2026-05-11,South,Pen set,8,6.0
+2026-05-11,South,Backpack,8,39.0
+2026-05-11,East,Pen set,12,6.0
+2026-05-11,East,Backpack,18,39.0
+2026-05-11,East,Desk lamp,17,27.0
+2026-05-11,West,Notebook,6,3.5
+2026-05-11,West,Pen set,7,6.0
+2026-05-18,North,Backpack,17,39.0
+2026-05-18,North,Calculator,17,18.5
+2026-05-18,South,Pen set,12,6.0
+2026-05-18,East,Notebook,13,3.5
+2026-05-18,East,Backpack,7,39.0
+2026-05-18,East,Desk lamp,17,27.0
+2026-05-18,West,Backpack,18,39.0
+2026-05-18,West,Calculator,10,18.5
+2026-05-25,North,Notebook,9,3.5
+2026-05-25,South,Pen set,19,6.0
+2026-05-25,South,Backpack,13,39.0
+2026-05-25,South,Calculator,8,18.5
+2026-05-25,East,Calculator,15,18.5
+2026-06-01,North,Backpack,17,39.0
+2026-06-01,North,Calculator,15,18.5
+2026-06-01,North,Desk lamp,8,27.0
+2026-06-01,South,Notebook,19,3.5
+2026-06-01,South,Pen set,13,6.0
+2026-06-01,South,Backpack,18,39.0
+2026-06-01,East,Notebook,31,3.5
+2026-06-01,East,Backpack,19,39.0
+2026-06-01,East,Calculator,16,18.5
+2026-06-01,East,Desk lamp,5,27.0
+2026-06-01,West,Notebook,20,3.5
+2026-06-01,West,Pen set,18,6.0
+2026-06-01,West,Backpack,10,39.0
+2026-06-08,North,Desk lamp,5,27.0
+2026-06-08,South,Notebook,11,3.5
+2026-06-08,South,Backpack,7,39.0
+2026-06-08,South,Desk lamp,11,27.0
+2026-06-08,West,Calculator,12,18.5
+2026-06-08,West,Desk lamp,12,27.0
+2026-06-15,North,Notebook,18,3.5
+2026-06-15,North,Backpack,17,39.0
+2026-06-15,South,Notebook,9,3.5
+2026-06-15,South,Backpack,9,39.0
+2026-06-15,South,Desk lamp,10,27.0
+2026-06-15,East,Backpack,19,39.0
+2026-06-15,West,Notebook,18,3.5
+2026-06-15,West,Pen set,17,6.0
+2026-06-15,West,Backpack,16,39.0
+2026-06-15,West,Desk lamp,10,27.0
+2026-06-22,North,Notebook,14,3.5
+2026-06-22,North,Calculator,16,18.5
+2026-06-22,East,Backpack,,39.0
+2026-06-22,East,Calculator,12,18.5
+2026-06-22,East,Desk lamp,21,27.0
+2026-06-22,West,Notebook,20,3.5
+2026-06-22,West,Pen set,14,6.0
+2026-06-22,West,Calculator,10,18.5
+2026-06-22,West,Desk lamp,8,27.0
