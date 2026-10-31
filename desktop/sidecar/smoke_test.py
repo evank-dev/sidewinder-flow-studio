@@ -24,7 +24,7 @@ import urllib.request
 from pathlib import Path
 
 READY_TIMEOUT = 180          # first start on a cold CI disk is slow (macOS scans the bundle)
-RUN_TIMEOUT = 180
+RUN_TIMEOUT = 240           # first imports of SciPy and friends are slow on Windows
 ENGINES = {"pandas", "duckdb", "polars", "sql", "ibis", "curvefit_fit", "curvefit_eval"}
 
 GEN = """import numpy as np
@@ -32,6 +32,10 @@ from scipy import stats
 rng = np.random.default_rng(0)
 df = pd.DataFrame({"g": rng.choice(["a", "b", "c"], 300), "x": stats.norm.rvs(size=300, random_state=1)})
 """
+
+
+def _has_frame(call_raw, pid: str, node_id: str) -> bool:
+    return call_raw(f"/api/execute/frame/{pid}/{node_id}?limit=1") == 200
 
 
 def fail(msg: str) -> None:
@@ -42,24 +46,32 @@ def fail(msg: str) -> None:
 def main(exe: str) -> None:
     data = Path(tempfile.mkdtemp(prefix="sfs-smoke-"))
     t0 = time.monotonic()
-    proc = subprocess.Popen([exe, "--data-dir", str(data)], stdin=subprocess.PIPE,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    import os
+    env = {**os.environ, "SFS_STACK_DUMP_SECONDS": "60"}     # thread dumps if something hangs
+    proc = subprocess.Popen([exe, "--data-dir", str(data)], stdin=subprocess.PIPE, env=env,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                            encoding="utf-8", errors="replace")
     stderr: list[str] = []
     threading.Thread(target=lambda: stderr.extend(proc.stderr), daemon=True).start()
 
     # ── readiness handshake ──
     port = None
     lines: list[str] = []
-    def read_ready():
+    ready = threading.Event()
+
+    def read_stdout():
+        # Keep reading after the ready line: node code's print() goes to
+        # stdout, and an undrained pipe (4 KB on Windows) blocks the backend.
         nonlocal port
         for line in proc.stdout:
-            if line.startswith("SFS_READY port="):
+            if port is None and line.startswith("SFS_READY port="):
                 port = int(line.split("port=")[1])
-                return
-            lines.append(line)
-    reader = threading.Thread(target=read_ready, daemon=True)
-    reader.start()
-    reader.join(READY_TIMEOUT)
+                ready.set()
+            else:
+                lines.append(line)
+        ready.set()
+    threading.Thread(target=read_stdout, daemon=True).start()
+    ready.wait(READY_TIMEOUT)
     if port is None:
         proc.kill()
         fail(f"no ready line after {time.monotonic() - t0:.0f}s\nstdout:\n{''.join(lines)}\n"
@@ -77,6 +89,15 @@ def main(exe: str) -> None:
                 return json.loads(raw) if raw[:1] in (b"{", b"[") else raw.decode()
         except urllib.error.HTTPError as e:
             fail(f"{req.method} {path} -> {e.code}: {e.read().decode()[:500]}")
+
+    def call_raw(path: str) -> int:
+        try:
+            with urllib.request.urlopen(base + path, timeout=30) as r:
+                return r.status
+        except urllib.error.HTTPError as e:
+            return e.code
+        except Exception:                                    # noqa: BLE001
+            return -1
 
     try:
         # ── the app and its capabilities ──
@@ -114,7 +135,9 @@ def main(exe: str) -> None:
                 break
             time.sleep(0.5)
         else:
-            fail("flow did not finish")
+            frames = {n["id"]: _has_frame(call_raw, pid, n["id"]) for n in flow["nodes"]}
+            fail(f"flow did not finish in {RUN_TIMEOUT}s; runs={runs}; node outputs={frames}\n"
+                 f"stdout tail:\n{''.join(lines[-30:])}")
         if runs[0]["status"] != "ok":
             fail(f"flow {runs[0]['status']}: {runs[0].get('error')}")
         pol = call(f"/api/execute/frame/{pid}/pol")

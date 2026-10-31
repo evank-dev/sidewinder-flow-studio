@@ -114,6 +114,10 @@ def _log_to_stderr() -> None:
     logging.basicConfig(level=logging.WARNING, stream=sys.stderr,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     faulthandler.enable(file=sys.stderr)
+    # Diagnostics for hangs (the CI smoke test sets it): every thread's stack
+    # to stderr every N seconds.
+    if os.environ.get("SFS_STACK_DUMP_SECONDS", "").isdigit():
+        faulthandler.dump_traceback_later(int(os.environ["SFS_STACK_DUMP_SECONDS"]), repeat=True, file=sys.stderr)
 
 
 def main(argv: list[str] | None = None) -> int:
