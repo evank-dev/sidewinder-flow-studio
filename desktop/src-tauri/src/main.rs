@@ -5,7 +5,7 @@
 //! window at http://127.0.0.1:<n>/. The backend serves both the frontend and the
 //! API, so the page is same-origin with its API and WebSocket. When the app
 //! exits, the backend's stdin is closed (it shuts down cleanly) and, failing
-//! that, it is killed.
+//! that, it is killed. Updates are in update.rs.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -18,6 +18,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Manager, RunEvent, Url};
+
+mod update;
 
 const READY_PREFIX: &str = "SFS_READY port=";
 const READY_TIMEOUT: Duration = Duration::from_secs(90);
@@ -124,7 +126,7 @@ fn start_backend(app: &AppHandle) -> Result<(), String> {
 }
 
 /// Close the backend's stdin (it exits on EOF); kill it if it hasn't after 5 s.
-fn stop_backend(app: &AppHandle) {
+pub(crate) fn stop_backend(app: &AppHandle) {
     let Some(mut child) = app.state::<Backend>().0.lock().unwrap().take() else { return };
     drop(child.stdin.take());
     let start = Instant::now();
@@ -156,10 +158,15 @@ fn main() {
                 let _ = window.set_focus();
             }
         }))
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Backend(Mutex::new(None)))
         .setup(|app| {
             if let Err(message) = start_backend(app.handle()) {
                 show_error(app.handle(), &message);
+            }
+            if update::enabled() {
+                update::check_in_background(app.handle().clone());
             }
             Ok(())
         })
