@@ -19,11 +19,12 @@ to Sidewinder Flow Studio. Use it as a template for your own engine.
 pip install -e plugins/sfs-plugin-sklearn
 ```
 
-For Docker, add to `backend/Dockerfile` before the data-directory step:
+For Docker, list it in `SFS_PLUGINS` in `.env` (copied from `.env.docker`) and
+rebuild the backend image:
 
-```dockerfile
-COPY plugins/sfs-plugin-sklearn /tmp/sfs-plugin-sklearn
-RUN pip install --no-cache-dir /tmp/sfs-plugin-sklearn
+```bash
+SFS_PLUGINS=curvefit,sklearn
+docker compose build --no-cache backend && docker compose up -d
 ```
 
 Restart SFS. The engine picker will show **scikit-learn** with a 🧩 plugin
@@ -33,7 +34,7 @@ badge — no frontend change needed, because the UI renders from
 Verify from the command line:
 
 ```bash
-curl -s localhost:8000/api/capabilities | python -m json.tool | grep -A3 sklearn
+curl -sL localhost:8000/api/capabilities/ | python -m json.tool | grep -A3 sklearn
 ```
 
 ## Using it
