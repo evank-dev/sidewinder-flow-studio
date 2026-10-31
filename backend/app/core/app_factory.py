@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -45,7 +45,7 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Sidewinder Flow Studio API",
-        version="1.31",
+        version="1.32",
         description="Visual Python notebook DAG with scheduling",
         lifespan=lifespan,
     )
@@ -68,6 +68,9 @@ def create_app() -> FastAPI:
     app.include_router(capabilities.router, prefix="/api/capabilities", tags=["capabilities"])
     app.include_router(explore.router,     prefix="/api/explore",     tags=["explore"])
     app.include_router(ws.router,          prefix="/ws",              tags=["websocket"])
+    if os.getenv("SFS_DESKTOP") == "1":
+        from app.api import desktop
+        app.include_router(desktop.router, prefix="/api/desktop",     tags=["desktop"])
 
     # Single-container and desktop mode: serve the built React app. The
     # default is backend/static (next to main.py); STATIC_DIR overrides it.
@@ -79,6 +82,9 @@ def create_app() -> FastAPI:
 
         @app.get("/{full_path:path}", include_in_schema=False)
         async def serve_spa(full_path: str):
+            # Client-side routes get the app; unknown API paths stay 404s
+            if full_path.startswith(("api/", "ws/")):
+                raise HTTPException(404, "Not found")
             return FileResponse(str(static_dir / "index.html"))
 
     return app
