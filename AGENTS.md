@@ -167,6 +167,10 @@ express upserts through pandas.
 6. Docker note: file paths must be visible to the backend container
    (volume-mounted); `host.docker.internal` reaches the host on Linux via
    compose extra_hosts.
+   Desktop note (`/api/capabilities` → `features.desktop`): node code can
+   import only the bundled libraries (pandas, NumPy, PyArrow, Polars, DuckDB,
+   SciPy, matplotlib, seaborn, Plotly, SQLGlot, Ibis, lmfit); there is no pip.
+   Connectors: PostgreSQL and SQLite only. No Report node (no Streamlit viewer).
 7. **Writing to a database/table: use `fast_write(df, conn, table, mode)`, NOT
    `df.to_sql`.** to_sql is row-by-row and slow; fast_write uses each database's
    native bulk loader. See "Writing data" above.

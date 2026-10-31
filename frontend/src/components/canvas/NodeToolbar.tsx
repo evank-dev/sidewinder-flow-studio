@@ -2,6 +2,7 @@ import { Zap, Code2, OctagonX, Table2, BarChart3, Compass, LayoutDashboard, Stic
 import { useState, useEffect } from 'react'
 import { useStore } from '@/store'
 import { api } from '@/utils/api'
+import { useFeatures } from '@/utils/engines'
 
 const NODES = [
   { type: 'trigger',   label: 'Trigger',    icon: <Zap size={13} />,       color: 'border-node-triggerBorder text-sky-300 bg-node-trigger' },
@@ -27,6 +28,9 @@ export function NodeToolbar() {
   const { activeProject, activeFlowId, applyBuiltFlow } = useStore()
   const flow = activeProject?.flows.find((f) => f.id === activeFlowId)
   const hasTrigger = (flow?.nodes as any[])?.some((n) => n.type === 'trigger')
+  // Report needs the Streamlit viewer, which the desktop edition doesn't ship
+  const features = useFeatures()
+  const nodes = NODES.filter((n) => n.type !== 'report_out' || features.reports !== false)
 
   const [building, setBuilding] = useState(false)
   const [custom, setCustom] = useState<any[]>([])
@@ -82,7 +86,7 @@ export function NodeToolbar() {
   return (
     <div className="flex items-center gap-2 px-4 py-2 bg-surface border-b border-canvas-border shrink-0 overflow-x-auto">
       <span className="text-xs text-muted uppercase tracking-wider mr-1 shrink-0">Add Node</span>
-      {NODES.map((n) => {
+      {nodes.map((n) => {
         const isTriggerWarning = n.type === 'trigger' && hasTrigger
         return (
           <div

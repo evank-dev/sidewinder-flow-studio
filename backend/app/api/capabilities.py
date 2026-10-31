@@ -6,6 +6,7 @@ plugins) instead of hard-coding a list, so installing a plugin surfaces its
 engine in the UI without a frontend change.
 """
 import importlib.util
+import os
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -36,7 +37,10 @@ async def get_capabilities():
             "enterprise_engines": any(
                 e["tier"] == "enterprise" and e["available"] for e in engines
             ),
-            "reports": _has("duckdb"),
+            # Reports open in the Streamlit viewer, which the desktop edition
+            # doesn't ship
+            "reports": _has("duckdb") and os.getenv("SFS_DESKTOP") != "1",
+            "desktop": os.getenv("SFS_DESKTOP") == "1",
             "iceberg": _has("pyiceberg"),
             "deltalake": _has("deltalake"),
         },

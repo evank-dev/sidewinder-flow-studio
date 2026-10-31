@@ -1,6 +1,6 @@
 /**
- * The engine list from /api/capabilities, fetched once and shared by every
- * component that needs it (node cards, the processor panel).
+ * /api/capabilities, fetched once and shared by every component that needs
+ * the engine list (node cards, the processor panel) or the feature flags.
  */
 import { useEffect, useState } from 'react'
 import { api } from './api'
@@ -13,14 +13,29 @@ export type EngineInfo = Awaited<ReturnType<typeof api.capabilities>>['engines']
 }
 
 let cache: EngineInfo[] | null = null
+let features: Record<string, boolean> | null = null
 let pending: Promise<EngineInfo[]> | null = null
 
 export function loadEngines(): Promise<EngineInfo[]> {
   if (cache) return Promise.resolve(cache)
   pending ??= api.capabilities()
-    .then((c) => (cache = (c?.engines ?? []) as EngineInfo[]))
+    .then((c) => {
+      features = c?.features ?? {}
+      return (cache = (c?.engines ?? []) as EngineInfo[])
+    })
     .catch(() => { pending = null; return [] })
   return pending
+}
+
+/** Feature flags from /api/capabilities; empty until loaded. */
+export function useFeatures(): Record<string, boolean> {
+  const [f, setF] = useState<Record<string, boolean>>(features ?? {})
+  useEffect(() => {
+    let live = true
+    if (!features) loadEngines().then(() => { if (live) setF(features ?? {}) })
+    return () => { live = false }
+  }, [])
+  return f
 }
 
 export function useEngines(): EngineInfo[] {
