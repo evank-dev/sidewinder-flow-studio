@@ -158,7 +158,7 @@ def test_desktop_info_welcome_and_logs(launched):
 
     # logs are read by name only, never by path
     (data / "logs").mkdir()
-    (data / "logs" / "backend.log").write_text("x" * 10 + "last line\n")
+    (data / "logs" / "backend.log").write_bytes(b"x" * 10 + b"last line\n")
     assert [l["name"] for l in _call(port, "/api/desktop/")[1]["logs"]] == ["backend.log"]
     status, log = _call(port, "/api/desktop/logs/backend.log")
     assert status == 200 and log["text"].endswith("last line\n") and not log["truncated"]
@@ -172,7 +172,7 @@ def test_launch_environment_drops_bundle_paths(monkeypatch):
     monkeypatch.setenv("APPDIR", "/tmp/.mount_x")
     monkeypatch.setenv("LD_LIBRARY_PATH", "/bundle/_internal")
     monkeypatch.setenv("LD_LIBRARY_PATH_ORIG", "/usr/local/lib")
-    monkeypatch.setenv("XDG_DATA_DIRS", "/tmp/.mount_x/usr/share:/usr/share")
+    monkeypatch.setenv("XDG_DATA_DIRS", os.pathsep.join(["/tmp/.mount_x/usr/share", "/usr/share"]))
     monkeypatch.setenv("GIO_MODULE_DIR", "/tmp/.mount_x/usr/lib/gio")
     env = _launch_environment()
     assert env["LD_LIBRARY_PATH"] == "/usr/local/lib" and "LD_LIBRARY_PATH_ORIG" not in env
